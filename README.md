@@ -269,9 +269,15 @@ El proyecto está preparado para desplegarse en [Railway](https://railway.app) c
 
 1. **Crear un proyecto en Railway** y conectar este repositorio (Deploy from GitHub repo).
 
-2. **Añadir PostgreSQL** al proyecto: en el dashboard, *New* → *Database* → *PostgreSQL*. Railway inyecta `DATABASE_URL` en las variables del servicio.
+2. **Añadir PostgreSQL** al proyecto: en el dashboard, *New* → *Database* → *PostgreSQL*.
 
-3. **Configurar el servicio del backend**:
+3. **Enlazar PostgreSQL al backend** (importante): el backend necesita `DATABASE_URL`. En el servicio de tu app (backend):
+   - Entrá a **Variables** (o **Settings** → **Variables**).
+   - Clic en **"+ New Variable"** o **"Add Reference"** / **"Reference Variable"**.
+   - Elegí **referenciar el servicio PostgreSQL** y la variable `DATABASE_URL`. Así Railway inyecta la URL real de la base (no localhost).
+   - Si no usás referencias: en el servicio PostgreSQL, en **Connect** o **Variables**, copiá el valor de `DATABASE_URL` y crealo como variable en el servicio del backend.
+
+4. **Configurar el servicio del backend**:
    - **Root Directory**: dejar vacío (el build usa la raíz).
    - **Builder**: Railway detecta el `Dockerfile` en la raíz del repo y construye con Docker. El `railway.toml` opcional refuerza el uso de Dockerfile.
    - **Variables de entorno** (Settings → Variables):
@@ -285,9 +291,9 @@ El proyecto está preparado para desplegarse en [Railway](https://railway.app) c
    | `MAX_TICKETS_PER_USER` | (Opcional) Límite de tickets por usuario; por defecto 10. |
    | `PORT` | Lo asigna Railway; no suele hacer falta definirlo. |
 
-4. **Schema de la base de datos**: en el primer arranque, si la tabla `users` no existe, el backend ejecuta automáticamente el contenido de `backend/src/db/schema.sql`. No hace falta correr migraciones a mano.
+5. **Schema de la base de datos**: en el primer arranque, si la tabla `users` no existe, el backend ejecuta automáticamente el contenido de `backend/src/db/schema.sql`. No hace falta correr migraciones a mano.
 
-5. **Deploy**: cada push a la rama conectada (por ejemplo `main`) dispara un nuevo build y deploy. Los logs se ven en el panel de Railway.
+6. **Deploy**: cada push a la rama conectada (por ejemplo `main`) dispara un nuevo build y deploy. Los logs se ven en el panel de Railway.
 
 ## Archivos de configuración
 

@@ -2,8 +2,16 @@ const { Pool } = require('pg');
 const fs   = require('fs');
 const path = require('path');
 
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString || !connectionString.startsWith('postgres')) {
+  const msg =
+    'DATABASE_URL no está configurada o no es una URL de PostgreSQL. ' +
+    'En Railway: añadí el servicio PostgreSQL y enlazalo a este servicio para que inyecte DATABASE_URL.';
+  throw new Error(msg);
+}
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString,
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
