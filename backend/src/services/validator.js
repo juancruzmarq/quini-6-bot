@@ -296,8 +296,14 @@ function buildUserResultsMessage(contestNumber, dateStr, ticketsWithResults, dra
       `📊 *Tus resultados — Sorteo N° ${contestNumber}* (${dateStr})`,
       ``,
     ];
-  // Nota: se omite el resumen del sorteo (\"Cómo terminó el sorteo\") para que el mensaje sea más corto.
-  lines.push(`*Tus tickets*`, ``);
+
+  const drawSummary = formatDrawSummary(drawResult);
+  if (drawSummary.length) {
+    lines.push(...drawSummary);
+    lines.push(`━━━━━━━━━━━━━━━━━━`, `*Tus tickets*`, ``);
+  } else {
+    lines.push(`*Tus tickets*`, ``);
+  }
 
   const MOD_ORDER = ['tradicional', 'segunda', 'revancha', 'siempre_sale', 'pozo_extra'];
 
