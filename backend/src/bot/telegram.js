@@ -20,6 +20,8 @@
  *   /runcycle           — Forzar ciclo completo (fetch + validar + notificar)
  *   /status             — Estado del sistema
  *   /testresultado      — Vista previa del mensaje de resultados (tus tickets, último sorteo)
+ *   /resetdb            — Reiniciar toda la data de la base (usuarios, tickets, resultados)
+ *   /broadcast mensaje  — Enviar mensaje a todos los usuarios
  */
 
 const TelegramBot = require('node-telegram-bot-api');
@@ -39,6 +41,19 @@ const COMMAND_COOLDOWN_MS = 3000; // 3 segundos entre el mismo comando por usuar
 
 function isAdmin(chatId) {
   return ADMIN_CHAT_ID && String(chatId) === ADMIN_CHAT_ID;
+}
+
+/** Devuelve las líneas de texto con los comandos admin (para /start y /help). */
+function getAdminCommandsLines() {
+  return [
+    ``,
+    `🛡 *Comandos admin:*`,
+    `/runcycle — Forzar ciclo (fetch + validar + notificar)`,
+    `/status — Estado del sistema`,
+    `/testresultado — Vista previa de resultados`,
+    `/resetdb — Reiniciar toda la data de la base`,
+    `/broadcast mensaje — Enviar mensaje a todos`,
+  ];
 }
 
 // ── Rate limiter en memoria ───────────────────────────────────────────────────
@@ -150,7 +165,7 @@ function registerHandlers(bot) {
       // Si ya está registrado → saludo de regreso, sin pedir código
       const existing = await getUserByChatId(chatId);
       if (existing) {
-        return bot.sendMessage(chatId, [
+        const lines = [
           `👋 *¡Hola de nuevo, ${existing.name || 'usuario'}!*`,
           ``,
           `Ya estás registrado. Tus comandos:`,
@@ -158,7 +173,12 @@ function registerHandlers(bot) {
           `/tickets — Ver tus tickets`,
           `/ultimo — Último sorteo`,
           `/help — Ayuda completa`,
-        ].join('\n'), { parse_mode: 'Markdown' });
+        ];
+        if (isAdmin(chatId)) {
+          lines.push(`\n🛡 *Sos admin.*`);
+          lines.push(...getAdminCommandsLines());
+        }
+        return bot.sendMessage(chatId, lines.join('\n'), { parse_mode: 'Markdown' });
       }
 
       // Usuario nuevo → verificar código si está configurado
@@ -190,7 +210,7 @@ function registerHandlers(bot) {
       const user = rows[0];
       log.bot.info({ chatId, name: user.name, username: username || '-' }, 'Nuevo usuario registrado');
 
-      await bot.sendMessage(chatId, [
+      const welcomeLines = [
         `👋 *¡Bienvenido al sistema Quini 6, ${user.name || 'usuario'}!*`,
         ``,
         `Con este bot podés:`,
@@ -205,7 +225,12 @@ function registerHandlers(bot) {
         `/ultimo — Ver el último sorteo`,
         `/sorteo 11/03/26 — Ver sorteo por fecha`,
         `/help — Ver ayuda completa`,
-      ].join('\n'), { parse_mode: 'Markdown' });
+      ];
+      if (isAdmin(chatId)) {
+        welcomeLines.push(`\n🛡 *Sos admin.*`);
+        welcomeLines.push(...getAdminCommandsLines());
+      }
+      await bot.sendMessage(chatId, welcomeLines.join('\n'), { parse_mode: 'Markdown' });
 
     } catch (err) {
       log.bot.error({ err: err.message }, 'Error en /start (registro)');
@@ -213,10 +238,16 @@ function registerHandlers(bot) {
     }
   });
 
-  // /add — Agregar ticket
+  // /add — Agregar ticket. Opcional: "unico" (próximo sorteo) o "fijo" (todos). Ej: /add 09,11,12,14,18,20 fijo
   bot.onText(/\/add (.+)/, async (msg, match) => {
     const chatId = String(msg.chat.id);
-    const input  = match[1].trim();
+    let input = match[1].trim();
+    let tipo = 'fijo';
+    const lastWord = input.split(/\s+/).pop();
+    if (/^(unico|fijo)$/i.test(lastWord)) {
+      tipo = lastWord.toLowerCase();
+      input = input.slice(0, -lastWord.length).trim();
+    }
 
     if (isRateLimited(chatId, 'add')) return;
 
@@ -246,7 +277,7 @@ function registerHandlers(bot) {
         );
       }
 
-      // Verificar duplicados
+      // Verificar duplicados (mismo usuario, mismos números, activo)
       const dup = await db.query(
         `SELECT id FROM tickets
          WHERE user_id = $1 AND is_active = true AND numbers_json = $2::jsonb`,
@@ -257,16 +288,18 @@ function registerHandlers(bot) {
       }
 
       const { rows } = await db.query(
-        `INSERT INTO tickets (user_id, numbers_json) VALUES ($1, $2) RETURNING id`,
-        [user.id, JSON.stringify(result.numbers)]
+        `INSERT INTO tickets (user_id, numbers_json, tipo) VALUES ($1, $2, $3) RETURNING id, tipo`,
+        [user.id, JSON.stringify(result.numbers), tipo]
       );
 
+      const tipoLabel = tipo === 'unico' ? 'Único (próximo sorteo)' : 'Fijo (todos los sorteos)';
       await bot.sendMessage(chatId, [
         `✅ *Ticket agregado* (${count + 1}/${MAX_TICKETS})`,
         ``,
         `🎱 ${result.numbers.join(' - ')}`,
+        `📌 Tipo: *${tipoLabel}*`,
         ``,
-        `Recibirás una notificación automática si este ticket gana.`,
+        `Recibirás una notificación con tu resultado en cada sorteo que corresponda.`,
       ].join('\n'), { parse_mode: 'Markdown' });
 
     } catch (err) {
@@ -288,7 +321,7 @@ function registerHandlers(bot) {
       }
 
       const { rows } = await db.query(
-        `SELECT id, label, numbers_json, created_at
+        `SELECT id, label, numbers_json, created_at, tipo
          FROM tickets
          WHERE user_id = $1 AND is_active = true
          ORDER BY created_at ASC`,
@@ -300,13 +333,15 @@ function registerHandlers(bot) {
           `No tenés tickets registrados.`,
           ``,
           `Usá /add 09,11,12,14,18,20 para agregar uno.`,
+          `O /add 09,11,12,14,18,20 unico — solo próximo sorteo.`,
         ].join('\n'));
       }
 
       const lines = rows.map((t, i) => {
         const nums  = t.numbers_json.join(' - ');
         const label = t.label ? ` _(${t.label})_` : '';
-        return `*${i + 1}.* ${nums}${label}`;
+        const tipoStr = (t.tipo === 'unico' ? 'Único' : 'Fijo');
+        return `*${i + 1}.* ${nums}${label} — ${tipoStr}`;
       });
 
       await bot.sendMessage(chatId, [
@@ -314,7 +349,8 @@ function registerHandlers(bot) {
         ``,
         ...lines,
         ``,
-        `Para eliminar un ticket usá /delete N° (ej: /delete 1)`,
+        `_Único_ = solo próximo sorteo. _Fijo_ = todos los sorteos.`,
+        `Para eliminar: /delete N° (ej: /delete 1)`,
       ].join('\n'), { parse_mode: 'Markdown' });
 
     } catch (err) {
@@ -556,7 +592,7 @@ function registerHandlers(bot) {
       }
 
       const rows = (await db.query(
-        `SELECT t.id, t.label, t.numbers_json, tr.results_json, tr.won_any_prize
+        `SELECT t.id, t.label, t.numbers_json, t.tipo, t.created_at, tr.results_json, tr.won_any_prize
          FROM ticket_results tr
          JOIN tickets t ON t.id = tr.ticket_id
          JOIN users   u ON u.id = t.user_id
@@ -573,8 +609,10 @@ function registerHandlers(bot) {
       const userTickets = rows.map(r => ({
         label: r.label,
         numbers_json: r.numbers_json,
+        tipo: r.tipo,
         results_json: r.results_json,
         won_any_prize: r.won_any_prize,
+        created_at: r.created_at,
       }));
       const message = buildUserResultsMessage(lastDraw.contest_number, dateStr, userTickets, lastDraw.result_json);
       await bot.sendMessage(chatId, `🧪 *Test — así se enviaría tu resultado:*\n\n${message}`, { parse_mode: 'Markdown' });
@@ -601,7 +639,7 @@ function registerHandlers(bot) {
       }
 
       const myTickets = (await db.query(
-        'SELECT id, numbers_json, label FROM tickets WHERE user_id = $1 AND is_active = true ORDER BY created_at ASC',
+        'SELECT id, numbers_json, label, tipo FROM tickets WHERE user_id = $1 AND is_active = true ORDER BY created_at ASC',
         [user.id]
       )).rows;
 
@@ -630,15 +668,16 @@ function registerHandlers(bot) {
         const tr = byTicket.get(t.id);
         const nums = t.numbers_json.join(' - ');
         const label = t.label ? ` _(${t.label})_` : '';
+        const tipoStr = t.tipo ? ` — ${t.tipo === 'unico' ? 'Único' : 'Fijo'}` : '';
         if (!tr) {
-          lines.push(`🎱 *${i + 1}.* ${nums}${label}`);
+          lines.push(`🎱 *${i + 1}.* ${nums}${tipoStr}${label}`);
           lines.push(`   ⏳ Sin validar para este sorteo`);
         } else if (tr.won_any_prize) {
           const wonMods = Object.entries(tr.results_json || {}).filter(([, r]) => r.won).map(([k]) => MOD_NAMES[k] || k);
-          lines.push(`🎱 *${i + 1}.* ${nums}${label}`);
+          lines.push(`🎱 *${i + 1}.* ${nums}${tipoStr}${label}`);
           lines.push(`   🏆 *Ganaste* en: ${wonMods.join(', ')}`);
         } else {
-          lines.push(`🎱 *${i + 1}.* ${nums}${label}`);
+          lines.push(`🎱 *${i + 1}.* ${nums}${tipoStr}${label}`);
           lines.push(`   ▫️ Sin premio en este sorteo`);
         }
         lines.push('');
@@ -758,20 +797,39 @@ function registerHandlers(bot) {
     }
   });
 
+  // /resetdb — Admin: borrar toda la data (usuarios, tickets, resultados)
+  bot.onText(/\/resetdb/, async (msg) => {
+    const chatId = String(msg.chat.id);
+    if (!isAdmin(chatId)) return;
+    if (isRateLimited(chatId, 'resetdb')) return;
+
+    try {
+      await db.query(
+        `TRUNCATE ticket_results, tickets, users, quini_results RESTART IDENTITY CASCADE`
+      );
+      log.bot.info({ chatId }, 'Base de datos reiniciada por admin');
+      await bot.sendMessage(chatId, '✅ *Base de datos reiniciada.*\n\nSe borraron usuarios, tickets, resultados de sorteos y validaciones. Los que quieran usar el bot deberán hacer /start de nuevo.', { parse_mode: 'Markdown' });
+    } catch (err) {
+      log.bot.error({ err: err.message }, 'Error en /resetdb');
+      await bot.sendMessage(chatId, `❌ Error: ${err.message}`);
+    }
+  });
+
   // /help
   bot.onText(/\/help/, async (msg) => {
     const chatId = String(msg.chat.id);
 
     if (isRateLimited(chatId, 'help')) return;
 
-    await bot.sendMessage(chatId, [
+    const helpLines = [
       `*🎲 Quini 6 — Ayuda*`,
       ``,
       `*Registrarse:*`,
       `/start CODIGO`,
       ``,
       `*Agregar ticket:*`,
-      `/add 09,11,12,14,18,20`,
+      `/add 09,11,12,14,18,20` + ' [unico|fijo]',
+      `_Único:_ solo el próximo sorteo. _Fijo:_ todos los sorteos (por defecto).`,
       `Límite: ${MAX_TICKETS} tickets. Números del 0 al 45.`,
       ``,
       `*Ver tus tickets:*`,
@@ -798,7 +856,12 @@ function registerHandlers(bot) {
       `*Notificaciones:*`,
       `Cuando haya resultados (mié/dom), recibirás un mensaje. Si ganaste, con el detalle.`,
       `Sorteos: miércoles y domingos 21:15 hs.`,
-    ].join('\n'), { parse_mode: 'Markdown' });
+    ];
+    if (isAdmin(chatId)) {
+      helpLines.push('');
+      helpLines.push(...getAdminCommandsLines());
+    }
+    await bot.sendMessage(chatId, helpLines.join('\n'), { parse_mode: 'Markdown' });
   });
 
   // Mensajes sin comando reconocido

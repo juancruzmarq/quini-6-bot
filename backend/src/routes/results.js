@@ -145,13 +145,16 @@ router.post('/:contestNumber/validate-tickets', async (req, res, next) => {
     const draw       = drawRes.rows[0];
     const drawResult = draw.result_json;
 
-    // Obtener todos los tickets activos con info del usuario
+    // Solo tickets que existían el día del sorteo; único = solo si aún no tiene resultado
     const ticketsRes = await db.query(
-      `SELECT t.id, t.user_id, t.label, t.numbers_json,
+      `SELECT t.id, t.user_id, t.label, t.numbers_json, t.tipo,
               u.telegram_chat_id, u.name, u.telegram_username
        FROM tickets t
        JOIN users u ON u.id = t.user_id
-       WHERE t.is_active = true AND u.is_active = true`
+       WHERE t.is_active = true AND u.is_active = true
+         AND t.created_at::date <= $1
+         AND (t.tipo = 'fijo' OR NOT EXISTS (SELECT 1 FROM ticket_results tr2 WHERE tr2.ticket_id = t.id))`,
+      [draw.draw_date]
     );
 
     const tickets = ticketsRes.rows;

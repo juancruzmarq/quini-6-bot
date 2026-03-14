@@ -38,11 +38,11 @@ router.get('/', async (req, res, next) => {
 /**
  * POST /api/tickets
  * Crea un nuevo ticket.
- * Body: { user_id, numbers, label? }
+ * Body: { user_id, numbers, label?, tipo? } — tipo: 'unico' (próximo sorteo) o 'fijo' (todos los sorteos). Default 'fijo'.
  */
 router.post('/', async (req, res, next) => {
   try {
-    const { user_id, numbers, label } = req.body;
+    const { user_id, numbers, label, tipo } = req.body;
 
     if (!user_id || !numbers) {
       return res.status(400).json({ error: 'Se requiere user_id y numbers' });
@@ -53,11 +53,13 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({ error: normalized.error });
     }
 
+    const ticketTipo = (tipo === 'unico' || tipo === 'fijo') ? tipo : 'fijo';
+
     const { rows } = await db.query(
-      `INSERT INTO tickets (user_id, label, numbers_json)
-       VALUES ($1, $2, $3)
+      `INSERT INTO tickets (user_id, label, numbers_json, tipo)
+       VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [user_id, label || null, JSON.stringify(normalized.numbers)]
+      [user_id, label || null, JSON.stringify(normalized.numbers), ticketTipo]
     );
 
     res.status(201).json(rows[0]);

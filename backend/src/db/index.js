@@ -40,6 +40,9 @@ async function runSchemaIfNeeded() {
 
   if (hasUsers) {
     log.db.info('Conectado (schema existente)');
+    await pool.query(`
+      ALTER TABLE tickets ADD COLUMN IF NOT EXISTS tipo VARCHAR(10) NOT NULL DEFAULT 'fijo'
+    `).catch(() => {});
     return;
   }
 

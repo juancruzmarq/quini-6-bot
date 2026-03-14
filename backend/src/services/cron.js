@@ -100,12 +100,18 @@ async function runFullCycle({ silent = false } = {}) {
     const drawRow    = (await db.query('SELECT * FROM quini_results WHERE contest_number = $1', [contestNumber])).rows[0];
     const drawResult = drawRow.result_json;
 
+    // Solo tickets que existían el día del sorteo (created_at <= draw_date).
+    // Único: solo participa del próximo sorteo (máximo un ticket_result por ticket).
+    // Fijo: participa de todos los sorteos desde su alta.
     const tickets = (await db.query(
-      `SELECT t.id, t.user_id, t.label, t.numbers_json,
+      `SELECT t.id, t.user_id, t.label, t.numbers_json, t.tipo,
               u.telegram_chat_id, u.name
        FROM tickets t
        JOIN users u ON u.id = t.user_id
-       WHERE t.is_active = true AND u.is_active = true`
+       WHERE t.is_active = true AND u.is_active = true
+         AND t.created_at::date <= $1
+         AND (t.tipo = 'fijo' OR NOT EXISTS (SELECT 1 FROM ticket_results tr2 WHERE tr2.ticket_id = t.id))`,
+      [drawRow.draw_date]
     )).rows;
 
     let winners = 0;
@@ -135,7 +141,7 @@ async function runFullCycle({ silent = false } = {}) {
     } else {
       const dateStr = formatDateDDMMYY(drawResult.drawDateRaw || drawRow.draw_date);
       const rows    = (await db.query(
-        `SELECT u.telegram_chat_id, u.name, t.id AS ticket_id, t.label, t.numbers_json, tr.results_json, tr.won_any_prize
+        `SELECT u.telegram_chat_id, u.name, t.id AS ticket_id, t.label, t.numbers_json, t.tipo, t.created_at AS ticket_created_at, tr.results_json, tr.won_any_prize
          FROM ticket_results tr
          JOIN tickets t ON t.id = tr.ticket_id
          JOIN users   u ON u.id = t.user_id
@@ -149,10 +155,12 @@ async function runFullCycle({ silent = false } = {}) {
         const chatId = r.telegram_chat_id;
         if (!byUser.has(chatId)) byUser.set(chatId, []);
         byUser.get(chatId).push({
-          label:         r.label,
-          numbers_json:  r.numbers_json,
-          results_json:  r.results_json,
-          won_any_prize: r.won_any_prize,
+          label:          r.label,
+          numbers_json:   r.numbers_json,
+          tipo:          r.tipo,
+          results_json:   r.results_json,
+          won_any_prize:  r.won_any_prize,
+          created_at:     r.ticket_created_at,
         });
       }
 

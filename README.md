@@ -121,15 +121,20 @@ entonces **NO participa del Pozo Extra**.
 
 Cuando el cron obtiene un **resultado nuevo**, se hace lo siguiente:
 
-1. Se validan **todos** los tickets activos de **todos** los usuarios contra ese sorteo (Tradicional, La Segunda, Revancha, Siempre Sale, Pozo Extra).
-2. Se envía **un mensaje por usuario** (por Telegram) con **sus** resultados personales:
-   - Por cada ticket del usuario: número de concurso, fecha (DD/MM/YY) y desglose por modalidad.
+1. Se validan solo los tickets que **ya existían el día del sorteo**: `created_at` del ticket (fecha de alta) debe ser ≤ fecha del sorteo. Los tickets agregados *después* de esa fecha no participan de ese sorteo.
+2. **Tipo de ticket:**  
+   - **Único:** participa solo en *un* sorteo (el próximo desde que se dio de alta). Una vez que tiene un resultado guardado, ya no se valida en sorteos siguientes.  
+   - **Fijo:** participa en *todos* los sorteos desde su alta; se genera automáticamente un resultado (`ticket_results`) por cada sorteo.
+3. Para esos tickets se calcula el resultado contra ese sorteo (Tradicional, La Segunda, Revancha, Siempre Sale, Pozo Extra).
+4. Se envía **un mensaje por usuario** (por Telegram) con **sus** resultados personales:
+   - Resumen del sorteo (números ganadores y premios por modalidad).
+   - Por cada ticket del usuario: **Alta** (fecha en que se dio de alta el ticket, DD/MM/YY), números y desglose por modalidad.
    - **Tradicional** y **La Segunda**: se muestran los aciertos (0–6) y si ganó (4, 5 o 6 aciertos).
    - **Revancha**: aciertos y si ganó (solo con 6).
    - **Siempre Sale**: aciertos y si ganó (solo con 5).
    - **Pozo Extra**: si participó (no ganó en otra), cuántos números en la unión y si ganó (6 en la unión); si no participó se indica “No participa (ganaste en otra modalidad)”.
 
-Cada usuario recibe **un solo mensaje** con todos sus tickets y el detalle de aciertos/ganador por modalidad. Quien ganó en alguna modalidad lo ve marcado con premio en ese mismo mensaje.
+Cada usuario recibe **un solo mensaje** con todos sus tickets y el detalle de aciertos/ganador por modalidad. Quien ganó en alguna modalidad lo ve marcado con premio en ese mismo mensaje. La **fecha de alta** del ticket (`created_at` en DB) se muestra en el mensaje y define para qué sorteos participa ese ticket.
 
 ---
 
@@ -178,12 +183,17 @@ updated_at
 
 ## tickets
 
-Cada usuario puede tener múltiples tickets.
+Cada usuario puede tener múltiples tickets. **created_at** es la fecha de alta del ticket; solo se valida contra sorteos cuya fecha sea ≥ esa fecha (un ticket agregado después de un sorteo no participa de ese sorteo).
+
+- **tipo** (`'unico'` | `'fijo'`):  
+  - **Único:** el ticket participa solo en el *próximo* sorteo (el primero desde que se dio de alta). Una vez que tiene un `ticket_result`, no se vuelve a validar.  
+  - **Fijo:** el ticket participa en *todos* los sorteos desde su alta; se crea automáticamente un `ticket_result` por cada sorteo.
 
 id
 user_id
 label
 numbers_json
+tipo
 is_active
 created_at
 updated_at
@@ -238,7 +248,7 @@ Telegram es la interfaz para los usuarios. Para registrarse hace falta un **cód
 | Comando | Descripción |
 |--------|-------------|
 | `/start CODIGO` | Registrarse con el código de invitación |
-| `/add 09,11,12,14,18,20` | Agregar un ticket (límite configurable por usuario) |
+| `/add 09,11,12,14,18,20 [unico\|fijo]` | Agregar un ticket. Opcional: _unico_ (solo próximo sorteo) o _fijo_ (todos; por defecto). Límite configurable. |
 | `/tickets` | Ver mis tickets |
 | `/delete 3` | Eliminar el ticket N° 3 |
 | `/resultado` o `/check` | ¿Cómo me fue en el último sorteo? |
@@ -248,13 +258,14 @@ Telegram es la interfaz para los usuarios. Para registrarse hace falta un **cód
 | `/recordar` | Activar/desactivar recordatorio antes del sorteo |
 | `/help` | Ayuda |
 
-**Comandos admin** (solo si está configurado `ADMIN_TELEGRAM_ID`)
+**Comandos admin** (solo si está configurado `ADMIN_TELEGRAM_ID`). Si sos admin, al hacer `/start` o `/help` el bot te indica que sos admin y te muestra estos comandos:
 
 | Comando | Descripción |
 |--------|-------------|
 | `/runcycle` | Forzar ciclo completo (fetch + validar + notificar) |
 | `/status` | Estado del sistema (usuarios, tickets, último sorteo) |
 | `/testresultado` | Vista previa del mensaje de resultados (tus tickets contra el último sorteo) |
+| `/resetdb` | Reiniciar toda la data de la base (usuarios, tickets, resultados de sorteos y validaciones) |
 | `/broadcast mensaje` | Enviar un mensaje a todos los usuarios |
 
 ---
@@ -304,7 +315,7 @@ El proyecto está preparado para desplegarse en [Railway](https://railway.app) c
    | `DATABASE_URL` | Inyectada por Railway al enlazar PostgreSQL (no hace falta crearla a mano). |
    | `TELEGRAM_BOT_TOKEN` | Token del bot de Telegram (obligatorio para el bot). |
    | `TELEGRAM_WEBHOOK_URL` | (Opcional en Railway) Si no la definís, en producción se usa `https://<RAILWAY_PUBLIC_DOMAIN>/telegram-webhook` automáticamente. Asegurate de que el servicio tenga dominio público generado en Railway. Evita el error 409. |
-   | `ADMIN_TELEGRAM_ID` | ID de Telegram del admin (comandos `/runcycle`, `/status`, `/broadcast`). |
+   | `ADMIN_TELEGRAM_ID` | ID de Telegram del admin (comandos `/runcycle`, `/status`, `/resetdb`, `/broadcast`; en `/start` y `/help` se muestra que sos admin y la lista de comandos admin). |
    | `INVITE_CODE` | Código para registrarse con `/start CODIGO`. |
    | `MAX_TICKETS_PER_USER` | (Opcional) Límite de tickets por usuario; por defecto 10. |
    | `LOG_LEVEL` | (Opcional) Nivel de log: `trace`, `debug`, `info`, `warn`, `error`; por defecto `info`. |

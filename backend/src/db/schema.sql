@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS tickets (
   user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   label        VARCHAR(100),
   numbers_json JSONB NOT NULL,
+  tipo         VARCHAR(10) NOT NULL DEFAULT 'fijo' CHECK (tipo IN ('unico', 'fijo')),
   is_active    BOOLEAN DEFAULT TRUE,
   created_at   TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at   TIMESTAMP WITH TIME ZONE DEFAULT NOW()

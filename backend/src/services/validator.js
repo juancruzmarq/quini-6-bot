@@ -279,7 +279,7 @@ function formatDrawSummary(drawResult) {
  *
  * @param {string} contestNumber
  * @param {string} dateStr - Fecha en DD/MM/YY
- * @param {Array<{ label?: string, numbers_json: string[], results_json: object, won_any_prize: boolean }>} ticketsWithResults
+ * @param {Array<{ label?: string, numbers_json: string[], tipo?: string, results_json: object, won_any_prize: boolean }>} ticketsWithResults
  * @param {object} [drawResult] - result_json del sorteo (opcional); si se pasa, se incluye resumen del sorteo
  * @returns {string}
  */
@@ -302,8 +302,12 @@ function buildUserResultsMessage(contestNumber, dateStr, ticketsWithResults, dra
     const t = ticketsWithResults[i];
     const nums = (t.numbers_json || []).map(n => String(n).padStart(2, '0')).join(' - ');
     const labelPart = t.label ? ` — _${t.label}_` : '';
-    lines.push(`🎱 *Ticket ${i + 1}*${labelPart}`);
+    const tipoPart = t.tipo ? ` (${t.tipo === 'unico' ? 'Único' : 'Fijo'})` : '';
+    lines.push(`🎱 *Ticket ${i + 1}*${tipoPart}${labelPart}`);
     lines.push(`   ${nums}`);
+    if (t.created_at) {
+      lines.push(`   📅 Alta: ${formatDateDDMMYY(t.created_at)}`);
+    }
     const r = t.results_json || {};
     for (const key of MOD_ORDER) {
       const res = r[key];
