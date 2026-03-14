@@ -23,6 +23,7 @@
 
 const TelegramBot = require('node-telegram-bot-api');
 const db          = require('../db');
+const log         = require('../logger');
 const { validateAndNormalizeNumbers } = require('../routes/tickets');
 const { setBotInstance }              = require('../routes/notifications');
 
@@ -73,18 +74,12 @@ function initializeBot() {
     bot = new TelegramBot(token, { polling: true });
     registerHandlers(bot);
     setBotInstance(bot);
-    console.log('🤖 Bot de Telegram iniciado en modo polling');
-    if (INVITE_CODE) {
-      console.log(`🔒 Código de invitación activo`);
-    } else {
-      console.warn('⚠️  INVITE_CODE no configurado — el bot es público');
-    }
-    console.log(`📊 Límite de tickets por usuario: ${MAX_TICKETS}`);
-    if (ADMIN_CHAT_ID) {
-      console.log(`🛡️  Admin configurado: chatId ${ADMIN_CHAT_ID}`);
-    } else {
-      console.warn('⚠️  ADMIN_TELEGRAM_ID no configurado — comandos admin deshabilitados');
-    }
+    log.bot.info('Bot iniciado en modo polling');
+    if (INVITE_CODE) log.bot.info('Código de invitación activo');
+    else log.bot.warn('INVITE_CODE no configurado — bot público');
+    log.bot.info({ maxTickets: MAX_TICKETS }, 'Límite de tickets por usuario');
+    if (ADMIN_CHAT_ID) log.bot.info({ adminChatId: ADMIN_CHAT_ID }, 'Admin configurado');
+    else log.bot.warn('ADMIN_TELEGRAM_ID no configurado — comandos admin deshabilitados');
   }
   return bot;
 }
@@ -125,7 +120,7 @@ function registerHandlers(bot) {
           );
         }
         if (input !== INVITE_CODE) {
-          console.warn(`🚫 Intento de registro con código incorrecto — chatId: ${chatId}, username: @${username}`);
+          log.bot.warn({ chatId, username: username || '-' }, 'Intento de registro con código incorrecto');
           return bot.sendMessage(chatId, `❌ Código de invitación inválido.`);
         }
       }
@@ -144,7 +139,7 @@ function registerHandlers(bot) {
       );
 
       const user = rows[0];
-      console.log('[BOT] Nuevo usuario registrado:', { chatId, name: user.name, username: username || '-' });
+      log.bot.info({ chatId, name: user.name, username: username || '-' }, 'Nuevo usuario registrado');
 
       await bot.sendMessage(chatId, [
         `👋 *¡Bienvenido al sistema Quini 6, ${user.name || 'usuario'}!*`,
@@ -164,7 +159,7 @@ function registerHandlers(bot) {
       ].join('\n'), { parse_mode: 'Markdown' });
 
     } catch (err) {
-      console.error('[BOT] Error en /start (registro):', err.message);
+      log.bot.error({ err: err.message }, 'Error en /start (registro)');
       await bot.sendMessage(chatId, '❌ Error al registrar usuario. Intentá de nuevo más tarde.');
     }
   });
@@ -226,7 +221,7 @@ function registerHandlers(bot) {
       ].join('\n'), { parse_mode: 'Markdown' });
 
     } catch (err) {
-      console.error('/add error:', err);
+      log.bot.error({ err: err.message }, '/add error');
       await bot.sendMessage(chatId, '❌ Error al guardar el ticket. Intentá de nuevo.');
     }
   });
@@ -274,7 +269,7 @@ function registerHandlers(bot) {
       ].join('\n'), { parse_mode: 'Markdown' });
 
     } catch (err) {
-      console.error('/tickets error:', err);
+      log.bot.error({ err: err.message }, '/tickets error');
       await bot.sendMessage(chatId, '❌ Error al obtener tickets.');
     }
   });
@@ -318,7 +313,7 @@ function registerHandlers(bot) {
       ].join('\n'));
 
     } catch (err) {
-      console.error('/delete error:', err);
+      log.bot.error({ err: err.message }, '/delete error');
       await bot.sendMessage(chatId, '❌ Error al eliminar el ticket.');
     }
   });
@@ -344,7 +339,7 @@ function registerHandlers(bot) {
       await bot.sendMessage(chatId, formatDrawMessage(rows[0]), { parse_mode: 'Markdown' });
 
     } catch (err) {
-      console.error('/ultimo error:', err);
+      log.bot.error({ err: err.message }, '/ultimo error');
       await bot.sendMessage(chatId, '❌ Error al obtener el último sorteo.');
     }
   });
@@ -394,7 +389,7 @@ function registerHandlers(bot) {
       await bot.sendMessage(chatId, formatDrawMessage(draw), { parse_mode: 'Markdown' });
 
     } catch (err) {
-      console.error('/sorteo error:', err);
+      log.bot.error({ err: err.message }, '/sorteo error');
       await bot.sendMessage(chatId, '❌ Error al buscar el sorteo.');
     }
   });
@@ -408,7 +403,7 @@ function registerHandlers(bot) {
     if (isRateLimited(chatId, 'runcycle')) return;
 
     await bot.sendMessage(chatId, '🔄 Iniciando ciclo completo...');
-    console.log('[BOT] Admin /runcycle ejecutado');
+    log.bot.info('Admin /runcycle ejecutado');
     try {
       if (!_runFullCycle) {
         return bot.sendMessage(chatId, '❌ Handler de ciclo no configurado.');
@@ -440,7 +435,7 @@ function registerHandlers(bot) {
 
       await bot.sendMessage(chatId, lines.join('\n'), { parse_mode: 'Markdown' });
     } catch (err) {
-      console.error('[BOT] Error en /runcycle:', err.message);
+      log.bot.error({ err: err.message }, 'Error en /runcycle');
       await bot.sendMessage(chatId, `❌ Error: ${err.message}`);
     }
   });
@@ -557,7 +552,7 @@ function registerHandlers(bot) {
 
       await bot.sendMessage(chatId, lines.join('\n').trim(), { parse_mode: 'Markdown' });
     } catch (err) {
-      console.error('/resultado error:', err);
+      log.bot.error({ err: err.message }, '/resultado error');
       await bot.sendMessage(chatId, `❌ Error: ${err.message}`);
     }
   });
@@ -591,7 +586,7 @@ function registerHandlers(bot) {
 
       await bot.sendMessage(chatId, lines.join('\n'), { parse_mode: 'Markdown' });
     } catch (err) {
-      console.error('/historial error:', err);
+      log.bot.error({ err: err.message }, '/historial error');
       await bot.sendMessage(chatId, `❌ Error: ${err.message}`);
     }
   });
@@ -634,7 +629,7 @@ function registerHandlers(bot) {
         await bot.sendMessage(chatId, '🔕 Recordatorio *desactivado*. No recibirás avisos previos al sorteo.');
       }
     } catch (err) {
-      console.error('/recordar error:', err);
+      log.bot.error({ err: err.message }, '/recordar error');
       await bot.sendMessage(chatId, `❌ Error: ${err.message}`);
     }
   });
@@ -658,13 +653,13 @@ function registerHandlers(bot) {
           sent++;
         } catch (err) {
           failed++;
-          console.error('[BOT] Broadcast fallido para chatId', u.telegram_chat_id, err.message);
+          log.bot.error({ chatId: u.telegram_chat_id, err: err.message }, 'Broadcast fallido');
         }
       }
-      console.log('[BOT] Broadcast enviado:', sent, 'ok,', failed, 'fallidos');
+      log.bot.info({ sent, failed }, 'Broadcast enviado');
       await bot.sendMessage(chatId, `📤 Broadcast enviado: ${sent} ok, ${failed} fallidos.`);
     } catch (err) {
-      console.error('[BOT] Error en /broadcast:', err.message);
+      log.bot.error({ err: err.message }, 'Error en /broadcast');
       await bot.sendMessage(chatId, `❌ Error: ${err.message}`);
     }
   });
@@ -725,11 +720,11 @@ function registerHandlers(bot) {
 
   bot.on('polling_error', (err) => {
     if (err.message && err.message.includes('401')) {
-      console.error('❌ Token de Telegram inválido (401) — deteniendo polling.');
+      log.bot.error('Token de Telegram inválido (401) — deteniendo polling');
       bot.stopPolling();
       return;
     }
-    console.error('Telegram polling error:', err.message);
+    log.bot.error({ err: err.message }, 'Telegram polling error');
   });
 }
 

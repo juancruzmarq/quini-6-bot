@@ -24,9 +24,12 @@ const baseOptions = {
   },
 };
 
-// En desarrollo: salida legible con pino-pretty
-const opts = isDev
-  ? {
+// En desarrollo: salida legible con pino-pretty (si está instalado)
+let opts = baseOptions;
+if (isDev) {
+  try {
+    require.resolve('pino-pretty');
+    opts = {
       ...baseOptions,
       transport: {
         target: 'pino-pretty',
@@ -36,8 +39,11 @@ const opts = isDev
           ignore: 'pid,hostname',
         },
       },
-    }
-  : baseOptions;
+    };
+  } catch (_) {
+    // pino-pretty no instalado (ej. producción con NODE_ENV no definido)
+  }
+}
 
 const base = pino(opts);
 

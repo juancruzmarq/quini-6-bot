@@ -289,6 +289,7 @@ El proyecto está preparado para desplegarse en [Railway](https://railway.app) c
    | `ADMIN_TELEGRAM_ID` | ID de Telegram del admin (comandos `/runcycle`, `/status`, `/broadcast`). |
    | `INVITE_CODE` | Código para registrarse con `/start CODIGO`. |
    | `MAX_TICKETS_PER_USER` | (Opcional) Límite de tickets por usuario; por defecto 10. |
+   | `LOG_LEVEL` | (Opcional) Nivel de log: `trace`, `debug`, `info`, `warn`, `error`; por defecto `info`. |
    | `PORT` | Lo asigna Railway; no suele hacer falta definirlo. |
 
 5. **Schema de la base de datos**: en el primer arranque, si la tabla `users` no existe, el backend ejecuta automáticamente el contenido de `backend/src/db/schema.sql`. No hace falta correr migraciones a mano.
@@ -308,3 +309,4 @@ El proyecto está preparado para desplegarse en [Railway](https://railway.app) c
 - **node-cron** — automatización (sorteos y recordatorios)
 - **PostgreSQL** — almacenamiento de resultados, usuarios y tickets
 - **Telegram Bot API** — comunicación con usuarios
+- **Pino** — logging estructurado (JSON en producción, salida legible en desarrollo)

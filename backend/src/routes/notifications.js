@@ -1,5 +1,6 @@
 const express = require('express');
 const db      = require('../db');
+const log     = require('../logger');
 const { buildWinnerMessage } = require('../services/validator');
 
 const router = express.Router();
@@ -73,12 +74,12 @@ router.post('/notify-winners', async (req, res, next) => {
 
         notified++;
       } catch (err) {
-        console.error(`Error notificando a ${winner.telegram_chat_id}:`, err.message);
+        log.api.error({ chatId: winner.telegram_chat_id, err: err.message }, 'Error notificando ganador');
         errors.push({ chatId: winner.telegram_chat_id, error: err.message });
       }
     }
 
-    console.log(`📨 Notificaciones sorteo ${contestNumber}: ${notified}/${winners.length} enviadas`);
+    log.api.info({ contestNumber, notified, total: winners.length }, 'Notificaciones enviadas');
 
     res.json({
       success:        true,

@@ -1,5 +1,6 @@
 const express  = require('express');
 const db       = require('../db');
+const log      = require('../logger');
 const { fetchAndParseLatest, fetchDebugInfo } = require('../services/parser');
 const { validateTicket }                      = require('../services/validator');
 
@@ -48,7 +49,7 @@ router.post('/fetch-and-save', async (req, res, next) => {
       [parsed.contestNumber, parsed.drawDate, cleanParsed]
     );
 
-    console.log(`✅ Sorteo ${parsed.contestNumber} (${parsed.drawDate}) guardado`);
+    log.api.info({ contestNumber: parsed.contestNumber, drawDate: parsed.drawDate }, 'Sorteo guardado');
 
     res.json({
       success:       true,
@@ -58,7 +59,7 @@ router.post('/fetch-and-save', async (req, res, next) => {
       result:        cleanParsed,
     });
   } catch (err) {
-    console.error('[API] fetch-and-save error:', err.message);
+    log.api.error({ err: err.message }, 'fetch-and-save error');
     next(err);
   }
 });
@@ -176,7 +177,7 @@ router.post('/:contestNumber/validate-tickets', async (req, res, next) => {
       if (validation.wonAny) winners++;
     }
 
-    console.log(`✅ Validación sorteo ${contestNumber}: ${tickets.length} tickets, ${winners} ganadores`);
+    log.api.info({ contestNumber, totalTickets: tickets.length, winners }, 'Validación completada');
 
     res.json({
       success:       true,
