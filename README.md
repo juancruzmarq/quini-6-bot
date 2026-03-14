@@ -273,7 +273,7 @@ El proyecto está preparado para desplegarse en [Railway](https://railway.app) c
 
 3. **Configurar el servicio del backend**:
    - **Root Directory**: dejar vacío (el build usa la raíz).
-   - **Builder**: el `railway.toml` y `Dockerfile.railway` en la raíz ya indican usar Dockerfile; Railway usará `Dockerfile.railway` para construir la imagen.
+   - **Builder**: Railway detecta el `Dockerfile` en la raíz del repo y construye con Docker. El `railway.toml` opcional refuerza el uso de Dockerfile.
    - **Variables de entorno** (Settings → Variables):
 
    | Variable | Descripción |
@@ -291,8 +291,8 @@ El proyecto está preparado para desplegarse en [Railway](https://railway.app) c
 
 ## Archivos de configuración
 
-- **`railway.toml`**: builder Dockerfile, ruta del Dockerfile, política de reinicio.
-- **`Dockerfile.railway`**: construye desde `backend/` e inicia con `node src/index.js`.
+- **`railway.toml`**: (opcional) builder Dockerfile, política de reinicio.
+- **`Dockerfile`**: en la raíz; construye desde `backend/` e inicia con `node src/index.js`. Es el que Railway/Nixpacks detectan por defecto.
 
 ---
 
