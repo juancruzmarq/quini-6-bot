@@ -11,6 +11,7 @@
 
 const axios   = require('axios');
 const cheerio = require('cheerio');
+const log     = require('../logger');
 
 const QUINI_URL = 'https://www.quini-6-resultados.com.ar/';
 
@@ -93,7 +94,7 @@ function parseQuiniHTML(html) {
   if (!drawDate)                 warnings.push('No se encontró fecha del sorteo');
   if (!modalities.tradicional)   warnings.push('No se encontraron números de Tradicional');
   if (warnings.length) {
-    console.warn('⚠️  Parser warnings:', warnings);
+    log.parser.warn({ warnings }, 'Parser warnings');
   }
 
   return {
@@ -186,8 +187,18 @@ function parseMoneyString(str) {
 // ── API pública ───────────────────────────────────────────────────────────────
 
 async function fetchAndParseLatest() {
-  const html = await fetchHTML();
-  return parseQuiniHTML(html);
+  log.parser.info('Obteniendo resultado desde quini-6-resultados...');
+  try {
+    const html = await fetchHTML();
+    const parsed = parseQuiniHTML(html);
+    if (parsed.contestNumber) {
+      log.parser.info({ contestNumber: parsed.contestNumber, drawDate: parsed.drawDateRaw || parsed.drawDate }, 'Sorteo obtenido');
+    }
+    return parsed;
+  } catch (err) {
+    log.parser.error({ err: err.message }, 'Error al obtener');
+    throw err;
+  }
 }
 
 async function fetchDebugInfo() {

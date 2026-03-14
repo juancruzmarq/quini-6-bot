@@ -15,6 +15,7 @@
 
 const cron = require('node-cron');
 const db   = require('../db');
+const log  = require('../logger');
 const { fetchAndParseLatest } = require('./parser');
 const { validateTicket, buildWinnerMessage } = require('./validator');
 
@@ -58,13 +59,13 @@ async function runFullCycle({ silent = false } = {}) {
 
   try {
     // ── Paso 1: Fetch y parseo ────────────────────────────────────────────────
-    if (!silent) console.log(`\n🔄 [CRON] Iniciando ciclo — ${startedAt}`);
+    if (!silent) log.cron.info({ startedAt }, 'Iniciando ciclo');
 
     const parsed = await fetchAndParseLatest();
 
     if (!parsed.contestNumber || !parsed.drawDate) {
       const msg = `Parser no extrajo datos (warnings: ${(parsed._warnings || []).join(', ')})`;
-      console.error('❌ [CRON]', msg);
+      log.cron.error({ warnings: parsed._warnings }, msg);
       result.error = msg;
       return result;
     }
@@ -76,7 +77,7 @@ async function runFullCycle({ silent = false } = {}) {
     );
 
     if (existing.rows.length > 0) {
-      if (!silent) console.log(`ℹ️  [CRON] Sorteo ${parsed.contestNumber} ya guardado — sin cambios`);
+      if (!silent) log.cron.info({ contestNumber: parsed.contestNumber }, 'Sorteo ya guardado — sin cambios');
       result.fetchResult = { alreadyExists: true, contestNumber: parsed.contestNumber };
       return result;
     }
@@ -87,13 +88,13 @@ async function runFullCycle({ silent = false } = {}) {
       `INSERT INTO quini_results (contest_number, draw_date, result_json) VALUES ($1, $2, $3)`,
       [parsed.contestNumber, parsed.drawDate, cleanParsed]
     );
-    console.log(`✅ [CRON] Sorteo ${parsed.contestNumber} (${parsed.drawDate}) guardado`);
+    log.cron.info({ contestNumber: parsed.contestNumber, drawDate: parsed.drawDate }, 'Sorteo guardado');
     result.fetchResult = { alreadyExists: false, contestNumber: parsed.contestNumber, drawDate: parsed.drawDate };
 
     const contestNumber = parsed.contestNumber;
 
     // ── Paso 2: Validar tickets ───────────────────────────────────────────────
-    console.log(`🎯 [CRON] Validando tickets para sorteo ${contestNumber}...`);
+    log.cron.info({ contestNumber }, 'Validando tickets...');
 
     const drawRow    = (await db.query('SELECT * FROM quini_results WHERE contest_number = $1', [contestNumber])).rows[0];
     const drawResult = drawRow.result_json;
@@ -123,23 +124,23 @@ async function runFullCycle({ silent = false } = {}) {
       if (validation.wonAny) winners++;
     }
 
-    console.log(`✅ [CRON] ${tickets.length} tickets validados — ${winners} ganadores`);
+    log.cron.info({ totalTickets: tickets.length, winners, contestNumber }, 'Tickets validados');
     result.validateResult = { totalTickets: tickets.length, winnersCount: winners };
 
     // ── Paso 3: Notificar ganadores ───────────────────────────────────────────
     if (winners === 0) {
-      console.log('📭 [CRON] Sin ganadores');
+      log.cron.info('Sin ganadores');
       result.notifyResult = { notified: 0 };
       return result;
     }
 
     if (!_botInstance) {
-      console.warn('⚠️  [CRON] Bot no disponible — saltando notificaciones');
+      log.cron.warn('Bot no disponible — saltando notificaciones');
       result.notifyResult = { notified: 0, reason: 'bot no disponible' };
       return result;
     }
 
-    console.log(`📨 [CRON] Notificando ${winners} ganador(es)...`);
+    log.cron.info({ winners }, 'Notificando ganadores...');
 
     const winnersRows   = (await db.query(
       `SELECT tr.results_json, t.label, t.numbers_json, u.telegram_chat_id, u.name
@@ -164,15 +165,15 @@ async function runFullCycle({ silent = false } = {}) {
         await _botInstance.sendMessage(w.telegram_chat_id, message, { parse_mode: 'Markdown' });
         notified++;
       } catch (err) {
-        console.error(`❌ [CRON] Error notificando a ${w.telegram_chat_id}:`, err.message);
+        log.cron.error({ chatId: w.telegram_chat_id, err: err.message }, 'Error notificando ganador');
       }
     }
 
-    console.log(`✅ [CRON] ${notified}/${winnersRows.length} notificaciones enviadas\n`);
+    log.cron.info({ notified, total: winnersRows.length }, 'Notificaciones enviadas');
     result.notifyResult = { notified, total: winnersRows.length };
 
   } catch (err) {
-    console.error('❌ [CRON] Error en el ciclo:', err.message);
+    log.cron.error({ err: err.message }, 'Error en el ciclo');
     result.error = err.message;
   }
 
@@ -186,9 +187,8 @@ async function runFullCycle({ silent = false } = {}) {
  * Si no está en la DB, envía una alerta al admin por Telegram.
  */
 async function runAlertCheck() {
-  console.log('\n🔔 [CRON] Verificación 22:00...');
+  log.cron.info('Verificación 22:00');
 
-  // Obtener la fecha de hoy en Argentina (el servidor tiene TZ configurado)
   const today = new Date().toISOString().slice(0, 10);
 
   const { rows } = await db.query(
@@ -197,14 +197,14 @@ async function runAlertCheck() {
   );
 
   if (rows.length > 0) {
-    console.log(`✅ [CRON] Resultado del sorteo ${rows[0].contest_number} ya guardado — OK`);
+    log.cron.info({ contestNumber: rows[0].contest_number }, 'Resultado ya guardado — OK');
     return;
   }
 
-  console.warn(`⚠️  [CRON] No se obtuvo el resultado del ${today} — enviando alerta al admin`);
+  log.cron.warn({ date: today }, 'No se obtuvo resultado — enviando alerta al admin');
 
   if (!_botInstance || !_adminChatId) {
-    console.warn('⚠️  [CRON] No se puede enviar alerta: bot o ADMIN_TELEGRAM_ID no configurado');
+    log.cron.warn('No se puede enviar alerta: bot o ADMIN_TELEGRAM_ID no configurado');
     return;
   }
 
@@ -271,9 +271,11 @@ async function runReminders() {
     for (const u of rows) {
       try {
         await _botInstance.sendMessage(u.telegram_chat_id, msg, { parse_mode: 'Markdown' });
-      } catch (_) {}
+      } catch (err) {
+        console.error('[CRON] Error enviando recordatorio a chatId', u.telegram_chat_id, err.message);
+      }
     }
-    console.log(`📅 [CRON] Recordatorios enviados: ${rows.length}`);
+    console.log('[CRON] Recordatorios:', rows.length === 0 ? '0 usuarios con recordatorio activo' : `${rows.length} enviados`);
   } catch (err) {
     if (err.code === '42703') return; // column reminder_enabled no existe aún
     throw err;

@@ -58,6 +58,7 @@ router.post('/fetch-and-save', async (req, res, next) => {
       result:        cleanParsed,
     });
   } catch (err) {
+    console.error('[API] fetch-and-save error:', err.message);
     next(err);
   }
 });

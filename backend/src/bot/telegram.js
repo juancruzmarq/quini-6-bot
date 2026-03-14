@@ -144,7 +144,7 @@ function registerHandlers(bot) {
       );
 
       const user = rows[0];
-      console.log(`✅ Nuevo usuario registrado: ${user.name} (@${username}, chatId: ${chatId})`);
+      console.log('[BOT] Nuevo usuario registrado:', { chatId, name: user.name, username: username || '-' });
 
       await bot.sendMessage(chatId, [
         `👋 *¡Bienvenido al sistema Quini 6, ${user.name || 'usuario'}!*`,
@@ -164,7 +164,7 @@ function registerHandlers(bot) {
       ].join('\n'), { parse_mode: 'Markdown' });
 
     } catch (err) {
-      console.error('/start error:', err);
+      console.error('[BOT] Error en /start (registro):', err.message);
       await bot.sendMessage(chatId, '❌ Error al registrar usuario. Intentá de nuevo más tarde.');
     }
   });
@@ -408,6 +408,7 @@ function registerHandlers(bot) {
     if (isRateLimited(chatId, 'runcycle')) return;
 
     await bot.sendMessage(chatId, '🔄 Iniciando ciclo completo...');
+    console.log('[BOT] Admin /runcycle ejecutado');
     try {
       if (!_runFullCycle) {
         return bot.sendMessage(chatId, '❌ Handler de ciclo no configurado.');
@@ -439,6 +440,7 @@ function registerHandlers(bot) {
 
       await bot.sendMessage(chatId, lines.join('\n'), { parse_mode: 'Markdown' });
     } catch (err) {
+      console.error('[BOT] Error en /runcycle:', err.message);
       await bot.sendMessage(chatId, `❌ Error: ${err.message}`);
     }
   });
@@ -654,12 +656,15 @@ function registerHandlers(bot) {
         try {
           await bot.sendMessage(u.telegram_chat_id, `📢 *Aviso:*\n\n${text}`, { parse_mode: 'Markdown' });
           sent++;
-        } catch (_) {
+        } catch (err) {
           failed++;
+          console.error('[BOT] Broadcast fallido para chatId', u.telegram_chat_id, err.message);
         }
       }
+      console.log('[BOT] Broadcast enviado:', sent, 'ok,', failed, 'fallidos');
       await bot.sendMessage(chatId, `📤 Broadcast enviado: ${sent} ok, ${failed} fallidos.`);
     } catch (err) {
+      console.error('[BOT] Error en /broadcast:', err.message);
       await bot.sendMessage(chatId, `❌ Error: ${err.message}`);
     }
   });

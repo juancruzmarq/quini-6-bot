@@ -1,6 +1,7 @@
 const { Pool } = require('pg');
 const fs   = require('fs');
 const path = require('path');
+const log  = require('../logger');
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString || !connectionString.startsWith('postgres')) {
@@ -18,7 +19,7 @@ const pool = new Pool({
 });
 
 pool.on('error', (err) => {
-  console.error('PostgreSQL pool error:', err);
+  log.db.error({ err: err.message }, 'Pool error');
 });
 
 const query = (text, params) => pool.query(text, params);
@@ -37,12 +38,15 @@ async function runSchemaIfNeeded() {
     )
   `).then(r => r.rows[0].exists);
 
-  if (hasUsers) return;
+  if (hasUsers) {
+    log.db.info('Conectado (schema existente)');
+    return;
+  }
 
   const schemaPath = path.join(__dirname, 'schema.sql');
   const sql = fs.readFileSync(schemaPath, 'utf8');
   await pool.query(sql);
-  console.log('✅ Schema de base de datos inicializado');
+  log.db.info('Schema inicializado (tablas creadas)');
 }
 
 module.exports = { query, getClient, pool, runSchemaIfNeeded };
