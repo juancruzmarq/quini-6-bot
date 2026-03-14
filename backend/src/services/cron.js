@@ -223,9 +223,9 @@ async function runAlertCheck() {
       ].join('\n'),
       { parse_mode: 'Markdown' }
     );
-    console.log('📨 [CRON] Alerta enviada al admin');
+    log.cron.info('Alerta enviada al admin');
   } catch (err) {
-    console.error('❌ [CRON] Error enviando alerta al admin:', err.message);
+    log.cron.error({ err: err.message }, 'Error enviando alerta al admin');
   }
 }
 
@@ -235,28 +235,23 @@ function initializeCron() {
   // Job 1: polling cada 5 minutos de 21:15 a 21:55
   cron.schedule(SCHEDULE_POLLING, () => {
     runFullCycle({ silent: false }).catch(err =>
-      console.error('❌ [CRON] Error no capturado en polling:', err)
+      log.cron.error({ err: err.message }, 'Error no capturado en polling')
     );
   }, { timezone: TZ });
 
-  // Job 2: alerta a las 22:00 si no se obtuvo el resultado
   cron.schedule(SCHEDULE_ALERT, () => {
     runAlertCheck().catch(err =>
-      console.error('❌ [CRON] Error no capturado en alerta:', err)
+      log.cron.error({ err: err.message }, 'Error no capturado en alerta')
     );
   }, { timezone: TZ });
 
-  // Job 3: recordatorio martes y sábado 20:00
   cron.schedule(SCHEDULE_REMINDER, () => {
     runReminders().catch(err =>
-      console.error('❌ [CRON] Error en recordatorios:', err)
+      log.cron.error({ err: err.message }, 'Error en recordatorios')
     );
   }, { timezone: TZ });
 
-  console.log(`⏰ Cron activo (${TZ}):`);
-  console.log(`   📥 Polling:    ${SCHEDULE_POLLING}  → cada 5 min de 21:15 a 21:55 (mié/dom)`);
-  console.log(`   🔔 Alerta:     ${SCHEDULE_ALERT}  → 22:00 si no se obtuvo el resultado`);
-  console.log(`   📅 Recordatorio: ${SCHEDULE_REMINDER}  → mar/sáb 20:00`);
+  log.cron.info({ timezone: TZ, polling: SCHEDULE_POLLING, alert: SCHEDULE_ALERT, reminder: SCHEDULE_REMINDER }, 'Cron activo');
 }
 
 // ── Recordatorios ─────────────────────────────────────────────────────────────
@@ -272,10 +267,10 @@ async function runReminders() {
       try {
         await _botInstance.sendMessage(u.telegram_chat_id, msg, { parse_mode: 'Markdown' });
       } catch (err) {
-        console.error('[CRON] Error enviando recordatorio a chatId', u.telegram_chat_id, err.message);
+        log.cron.error({ chatId: u.telegram_chat_id, err: err.message }, 'Error enviando recordatorio');
       }
     }
-    console.log('[CRON] Recordatorios:', rows.length === 0 ? '0 usuarios con recordatorio activo' : `${rows.length} enviados`);
+    log.cron.info({ count: rows.length }, rows.length === 0 ? 'Recordatorios: 0 usuarios activos' : 'Recordatorios enviados');
   } catch (err) {
     if (err.code === '42703') return; // column reminder_enabled no existe aún
     throw err;
