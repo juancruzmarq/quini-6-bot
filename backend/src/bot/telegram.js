@@ -19,12 +19,14 @@
  * Comandos admin (solo ADMIN_TELEGRAM_ID):
  *   /runcycle           — Forzar ciclo completo (fetch + validar + notificar)
  *   /status             — Estado del sistema
+ *   /testresultado      — Vista previa del mensaje de resultados (tus tickets, último sorteo)
  */
 
 const TelegramBot = require('node-telegram-bot-api');
 const db          = require('../db');
 const log         = require('../logger');
 const { formatDateDDMMYY }            = require('../utils/dateFormat');
+const { buildUserResultsMessage }     = require('../services/validator');
 const { validateAndNormalizeNumbers } = require('../routes/tickets');
 const { setBotInstance }              = require('../routes/notifications');
 
@@ -534,6 +536,50 @@ function registerHandlers(bot) {
 
       await bot.sendMessage(chatId, lines.join('\n'), { parse_mode: 'Markdown' });
     } catch (err) {
+      await bot.sendMessage(chatId, `❌ Error: ${err.message}`);
+    }
+  });
+
+  // /testresultado — Admin: vista previa del mensaje de resultados (tus tickets, último sorteo)
+  bot.onText(/\/testresultado/, async (msg) => {
+    const chatId = String(msg.chat.id);
+    if (!isAdmin(chatId)) return;
+    if (isRateLimited(chatId, 'testresultado')) return;
+
+    try {
+      const lastDraw = (await db.query(
+        'SELECT contest_number, draw_date, result_json FROM quini_results ORDER BY draw_date DESC LIMIT 1'
+      )).rows[0];
+
+      if (!lastDraw) {
+        return bot.sendMessage(chatId, '📭 No hay ningún sorteo guardado. Ejecutá /runcycle para obtener uno.');
+      }
+
+      const rows = (await db.query(
+        `SELECT t.id, t.label, t.numbers_json, tr.results_json, tr.won_any_prize
+         FROM ticket_results tr
+         JOIN tickets t ON t.id = tr.ticket_id
+         JOIN users   u ON u.id = t.user_id
+         WHERE u.telegram_chat_id = $1 AND tr.contest_number = $2
+         ORDER BY t.id`,
+        [chatId, lastDraw.contest_number]
+      )).rows;
+
+      if (!rows.length) {
+        return bot.sendMessage(chatId, `No tenés tickets validados para el último sorteo (N° ${lastDraw.contest_number}). Agregá tickets con /add y volvé a probar.`);
+      }
+
+      const dateStr = formatDateDDMMYY(lastDraw.result_json?.drawDateRaw || lastDraw.draw_date);
+      const userTickets = rows.map(r => ({
+        label: r.label,
+        numbers_json: r.numbers_json,
+        results_json: r.results_json,
+        won_any_prize: r.won_any_prize,
+      }));
+      const message = buildUserResultsMessage(lastDraw.contest_number, dateStr, userTickets);
+      await bot.sendMessage(chatId, `🧪 *Test — así se enviaría tu resultado:*\n\n${message}`, { parse_mode: 'Markdown' });
+    } catch (err) {
+      log.bot.error({ err: err.message }, '/testresultado error');
       await bot.sendMessage(chatId, `❌ Error: ${err.message}`);
     }
   });

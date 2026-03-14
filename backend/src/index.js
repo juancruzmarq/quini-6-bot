@@ -32,6 +32,26 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Protección de la API: si API_SECRET está definido, todas las rutas /api/* lo requieren.
+// /health y /telegram-webhook quedan públicas (Telegram llama al webhook sin clave).
+const API_SECRET = process.env.API_SECRET && process.env.API_SECRET.trim();
+app.use('/api', (req, res, next) => {
+  if (!API_SECRET) {
+    if (process.env.NODE_ENV === 'production') {
+      log.http.warn('API_SECRET no definido — la API está expuesta. Definí API_SECRET en producción.');
+    }
+    return next();
+  }
+  const authHeader = req.headers.authorization;
+  const apiKey     = req.headers['x-api-key'];
+  const token      = (authHeader && authHeader.startsWith('Bearer ')) ? authHeader.slice(7) : apiKey;
+  if (token !== API_SECRET) {
+    log.http.warn({ path: req.path }, 'API: acceso denegado (clave inválida o ausente)');
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
+});
+
 app.use('/api/results',       resultsRouter);
 app.use('/api/tickets',       ticketsRouter);
 app.use('/api/users',         usersRouter);

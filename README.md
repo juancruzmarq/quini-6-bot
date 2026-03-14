@@ -117,6 +117,22 @@ entonces **NO participa del Pozo Extra**.
 
 ---
 
+# 📬 Mensaje de resultados por usuario
+
+Cuando el cron obtiene un **resultado nuevo**, se hace lo siguiente:
+
+1. Se validan **todos** los tickets activos de **todos** los usuarios contra ese sorteo (Tradicional, La Segunda, Revancha, Siempre Sale, Pozo Extra).
+2. Se envía **un mensaje por usuario** (por Telegram) con **sus** resultados personales:
+   - Por cada ticket del usuario: número de concurso, fecha (DD/MM/YY) y desglose por modalidad.
+   - **Tradicional** y **La Segunda**: se muestran los aciertos (0–6) y si ganó (4, 5 o 6 aciertos).
+   - **Revancha**: aciertos y si ganó (solo con 6).
+   - **Siempre Sale**: aciertos y si ganó (solo con 5).
+   - **Pozo Extra**: si participó (no ganó en otra), cuántos números en la unión y si ganó (6 en la unión); si no participó se indica “No participa (ganaste en otra modalidad)”.
+
+Cada usuario recibe **un solo mensaje** con todos sus tickets y el detalle de aciertos/ganador por modalidad. Quien ganó en alguna modalidad lo ve marcado con premio en ese mismo mensaje.
+
+---
+
 # 📦 Estructura del resultado del sorteo
 
 El parser del HTML genera una estructura como esta:
@@ -238,6 +254,7 @@ Telegram es la interfaz para los usuarios. Para registrarse hace falta un **cód
 |--------|-------------|
 | `/runcycle` | Forzar ciclo completo (fetch + validar + notificar) |
 | `/status` | Estado del sistema (usuarios, tickets, último sorteo) |
+| `/testresultado` | Vista previa del mensaje de resultados (tus tickets contra el último sorteo) |
 | `/broadcast mensaje` | Enviar un mensaje a todos los usuarios |
 
 ---
@@ -291,6 +308,7 @@ El proyecto está preparado para desplegarse en [Railway](https://railway.app) c
    | `INVITE_CODE` | Código para registrarse con `/start CODIGO`. |
    | `MAX_TICKETS_PER_USER` | (Opcional) Límite de tickets por usuario; por defecto 10. |
    | `LOG_LEVEL` | (Opcional) Nivel de log: `trace`, `debug`, `info`, `warn`, `error`; por defecto `info`. |
+   | `API_SECRET` | (Recomendado en producción) Clave para proteger todas las rutas `/api/*`. Sin ella, la API es pública. Header: `Authorization: Bearer <API_SECRET>` o `X-API-Key: <API_SECRET>`. `/health` y `/telegram-webhook` siguen siendo públicas. |
    | `PORT` | Lo asigna Railway; no suele hacer falta definirlo. |
 
 5. **Schema de la base de datos**: en el primer arranque, si la tabla `users` no existe, el backend ejecuta automáticamente el contenido de `backend/src/db/schema.sql`. No hace falta correr migraciones a mano.

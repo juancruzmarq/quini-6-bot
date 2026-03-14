@@ -16,8 +16,9 @@
 const cron = require('node-cron');
 const db   = require('../db');
 const log  = require('../logger');
+const { formatDateDDMMYY }   = require('../utils/dateFormat');
 const { fetchAndParseLatest } = require('./parser');
-const { validateTicket, buildWinnerMessage } = require('./validator');
+const { validateTicket, buildUserResultsMessage } = require('./validator');
 
 // ── Configuración ─────────────────────────────────────────────────────────────
 
@@ -127,50 +128,47 @@ async function runFullCycle({ silent = false } = {}) {
     log.cron.info({ totalTickets: tickets.length, winners, contestNumber }, 'Tickets validados');
     result.validateResult = { totalTickets: tickets.length, winnersCount: winners };
 
-    // ── Paso 3: Notificar ganadores ───────────────────────────────────────────
-    if (winners === 0) {
-      log.cron.info('Sin ganadores');
-      result.notifyResult = { notified: 0 };
-      return result;
-    }
-
+    // ── Paso 3: Enviar a cada usuario sus resultados (todos sus tickets y modalidades) ─
     if (!_botInstance) {
       log.cron.warn('Bot no disponible — saltando notificaciones');
       result.notifyResult = { notified: 0, reason: 'bot no disponible' };
-      return result;
-    }
+    } else {
+      const dateStr = formatDateDDMMYY(drawResult.drawDateRaw || drawRow.draw_date);
+      const rows    = (await db.query(
+        `SELECT u.telegram_chat_id, u.name, t.id AS ticket_id, t.label, t.numbers_json, tr.results_json, tr.won_any_prize
+         FROM ticket_results tr
+         JOIN tickets t ON t.id = tr.ticket_id
+         JOIN users   u ON u.id = t.user_id
+         WHERE tr.contest_number = $1 AND u.is_active = true
+         ORDER BY u.telegram_chat_id, t.id`,
+        [contestNumber]
+      )).rows;
 
-    log.cron.info({ winners }, 'Notificando ganadores...');
-
-    const winnersRows   = (await db.query(
-      `SELECT tr.results_json, t.label, t.numbers_json, u.telegram_chat_id, u.name
-       FROM ticket_results tr
-       JOIN tickets t ON t.id = tr.ticket_id
-       JOIN users   u ON u.id = t.user_id
-       WHERE tr.contest_number = $1 AND tr.won_any_prize = true`,
-      [contestNumber]
-    )).rows;
-
-    let notified = 0;
-    for (const w of winnersRows) {
-      try {
-        const message = buildWinnerMessage(
-          { name: w.name },
-          { label: w.label, numbers_json: w.numbers_json },
-          contestNumber,
-          drawResult.drawDateRaw || drawRow.draw_date,
-          { wonAny: true, results: w.results_json },
-          drawResult
-        );
-        await _botInstance.sendMessage(w.telegram_chat_id, message, { parse_mode: 'Markdown' });
-        notified++;
-      } catch (err) {
-        log.cron.error({ chatId: w.telegram_chat_id, err: err.message }, 'Error notificando ganador');
+      const byUser = new Map();
+      for (const r of rows) {
+        const chatId = r.telegram_chat_id;
+        if (!byUser.has(chatId)) byUser.set(chatId, []);
+        byUser.get(chatId).push({
+          label:         r.label,
+          numbers_json:  r.numbers_json,
+          results_json:  r.results_json,
+          won_any_prize: r.won_any_prize,
+        });
       }
-    }
 
-    log.cron.info({ notified, total: winnersRows.length }, 'Notificaciones enviadas');
-    result.notifyResult = { notified, total: winnersRows.length };
+      let notified = 0;
+      for (const [chatId, userTickets] of byUser) {
+        try {
+          const message = buildUserResultsMessage(contestNumber, dateStr, userTickets);
+          await _botInstance.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+          notified++;
+        } catch (err) {
+          log.cron.error({ chatId, err: err.message }, 'Error enviando resultados al usuario');
+        }
+      }
+      log.cron.info({ contestNumber, notified, totalUsers: byUser.size }, 'Resultados enviados por usuario');
+      result.notifyResult = { notified, totalUsers: byUser.size };
+    }
 
   } catch (err) {
     log.cron.error({ err: err.message }, 'Error en el ciclo');

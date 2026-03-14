@@ -232,4 +232,58 @@ const MODALITY_ICONS = {
   pozo_extra:   '⭐',
 };
 
-module.exports = { validateTicket, buildWinnerMessage };
+/**
+ * Construye el mensaje de "tus resultados" para un usuario: todos sus tickets
+ * con el desglose por modalidad (aciertos y si ganó).
+ * Se usa cuando hay un sorteo nuevo y se notifica a cada usuario.
+ *
+ * @param {string} contestNumber
+ * @param {string} dateStr - Fecha en DD/MM/YY
+ * @param {Array<{ label?: string, numbers_json: string[], results_json: object, won_any_prize: boolean }>} ticketsWithResults
+ * @returns {string}
+ */
+function buildUserResultsMessage(contestNumber, dateStr, ticketsWithResults) {
+  const lines = [
+    `📊 *Tus resultados — Sorteo N° ${contestNumber}* (${dateStr})`,
+    ``,
+  ];
+
+  const MOD_ORDER = ['tradicional', 'segunda', 'revancha', 'siempre_sale', 'pozo_extra'];
+
+  for (let i = 0; i < ticketsWithResults.length; i++) {
+    const t = ticketsWithResults[i];
+    const nums = (t.numbers_json || []).map(n => String(n).padStart(2, '0')).join(' - ');
+    const labelPart = t.label ? ` — _${t.label}_` : '';
+    lines.push(`🎱 *Ticket ${i + 1}*${labelPart}`);
+    lines.push(`   ${nums}`);
+    const r = t.results_json || {};
+    for (const key of MOD_ORDER) {
+      const res = r[key];
+      if (!res) continue;
+      const icon = MODALITY_ICONS[key];
+      const name = MODALITY_NAMES[key];
+      if (key === 'pozo_extra') {
+        if (res.reason) {
+          lines.push(`   ${icon} ${name}: No participa (ganaste en otra)`);
+        } else if (res.won) {
+          lines.push(`   ${icon} ${name}: 6 en la unión — 🏆 *Ganaste*`);
+        } else {
+          const inUnion = res.matched ? res.matched.length : 0;
+          lines.push(`   ${icon} ${name}: ${inUnion} en la unión — No ganó`);
+        }
+      } else {
+        const hits = res.hits != null ? res.hits : 0;
+        if (res.won && res.prize) {
+          lines.push(`   ${icon} ${name}: ${hits} aciertos — 🏆 *Ganaste* (${res.prize.prize || ''})`);
+        } else {
+          lines.push(`   ${icon} ${name}: ${hits} aciertos`);
+        }
+      }
+    }
+    lines.push(``);
+  }
+
+  return lines.join('\n').trim();
+}
+
+module.exports = { validateTicket, buildWinnerMessage, buildUserResultsMessage };
