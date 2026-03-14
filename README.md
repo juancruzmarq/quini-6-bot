@@ -286,6 +286,7 @@ El proyecto está preparado para desplegarse en [Railway](https://railway.app) c
    |----------|-------------|
    | `DATABASE_URL` | Inyectada por Railway al enlazar PostgreSQL (no hace falta crearla a mano). |
    | `TELEGRAM_BOT_TOKEN` | Token del bot de Telegram (obligatorio para el bot). |
+   | `TELEGRAM_WEBHOOK_URL` | (Recomendado en producción) URL pública del webhook, ej. `https://tu-app.railway.app/telegram-webhook`. Evita el error 409 cuando hay más de una instancia. |
    | `ADMIN_TELEGRAM_ID` | ID de Telegram del admin (comandos `/runcycle`, `/status`, `/broadcast`). |
    | `INVITE_CODE` | Código para registrarse con `/start CODIGO`. |
    | `MAX_TICKETS_PER_USER` | (Opcional) Límite de tickets por usuario; por defecto 10. |

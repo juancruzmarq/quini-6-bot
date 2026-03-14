@@ -68,13 +68,42 @@ function setRunCycleHandler(fn) {
   _runFullCycle = fn;
 }
 
-function initializeBot() {
+const WEBHOOK_PATH = '/telegram-webhook';
+
+/**
+ * Inicializa el bot. Si TELEGRAM_WEBHOOK_URL está definido, usa webhook (recomendado en producción).
+ * Si no, usa polling (solo una instancia debe estar corriendo).
+ * @param {object} [app] - Instancia de Express; obligatorio si usás webhook, para registrar la ruta POST.
+ */
+function initializeBot(app) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
+  const webhookUrl = process.env.TELEGRAM_WEBHOOK_URL && process.env.TELEGRAM_WEBHOOK_URL.trim();
+
   if (!bot) {
-    bot = new TelegramBot(token, { polling: true });
+    const useWebhook = Boolean(webhookUrl);
+    bot = new TelegramBot(token, { polling: !useWebhook });
     registerHandlers(bot);
     setBotInstance(bot);
-    log.bot.info('Bot iniciado en modo polling');
+
+    if (useWebhook) {
+      if (!app) {
+        throw new Error('TELEGRAM_WEBHOOK_URL está definido pero no se pasó la app Express. Pasa app a initializeBot(app).');
+      }
+      app.post(WEBHOOK_PATH, (req, res) => {
+        bot.processUpdate(req.body).catch((err) => {
+          log.bot.error({ err: err.message }, 'Error procesando update');
+        });
+        res.sendStatus(200);
+      });
+      bot.setWebHook(webhookUrl).then(() => {
+        log.bot.info({ webhookUrl }, 'Bot en modo webhook');
+      }).catch((err) => {
+        log.bot.error({ err: err.message }, 'Error configurando webhook');
+      });
+    } else {
+      log.bot.info('Bot en modo polling (solo una instancia debe correr con este token)');
+    }
+
     if (INVITE_CODE) log.bot.info('Código de invitación activo');
     else log.bot.warn('INVITE_CODE no configurado — bot público');
     log.bot.info({ maxTickets: MAX_TICKETS }, 'Límite de tickets por usuario');

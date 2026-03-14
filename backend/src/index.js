@@ -71,17 +71,13 @@ db.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS reminder_enabled BOOLEAN DE
 async function start() {
   await db.runSchemaIfNeeded();
 
-  app.listen(PORT, () => {
-    log.info({ port: PORT }, 'Quini Backend corriendo');
-  });
-
   const botToken           = process.env.TELEGRAM_BOT_TOKEN || '';
   const tokenParecePvalido = botToken.length > 20 && botToken.includes(':');
 
   if (tokenParecePvalido) {
     try {
       const { initializeBot, setRunCycleHandler } = require('./bot/telegram');
-      const bot = initializeBot();
+      const bot = initializeBot(app);
       setBotForCron(bot);
       setAdminChatId(process.env.ADMIN_TELEGRAM_ID);
       setRunCycleHandler(runFullCycle);
@@ -94,6 +90,10 @@ async function start() {
   }
 
   initializeCron();
+
+  app.listen(PORT, () => {
+    log.info({ port: PORT }, 'Quini Backend corriendo');
+  });
 }
 
 start().catch((err) => {
