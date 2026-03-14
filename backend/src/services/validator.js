@@ -257,12 +257,34 @@ function formatDrawSummary(drawResult) {
   }
 
   function getTotalPrizeString(p) {
-    // En este proyecto, p.prize suele ser el premio por ganador (ya dividido).
-    // Para mostrar pozo total, multiplicamos por winners cuando se pueda.
     const winners = typeof p?.winners === 'number' ? p.winners : null;
     const perAmount = parsePrizeAmount(p);
     if (!winners || winners <= 0 || !perAmount) return p?.prize || '';
     return formatArs(perAmount * winners);
+  }
+
+  const COL = { aciertos: 10, ganadores: 12, premioInd: 24, pozo: 22 };
+  const sep = ' | ';
+  const header = [
+    'aciertos'.padEnd(COL.aciertos),
+    'ganadores'.padEnd(COL.ganadores),
+    'premio individual'.padEnd(COL.premioInd),
+    'pozo',
+  ].join(sep);
+
+  function row(p) {
+    const winners = typeof p.winners === 'number' ? p.winners : null;
+    const isVacante = !winners || winners === 0;
+    const ganadoresStr = isVacante ? 'Vacante' : String(winners);
+    const pozoTotal = getTotalPrizeString(p);
+    const premioPorGanador = p.prize || '';
+    const premioIndStr = isVacante ? '' : premioPorGanador;
+    return [
+      String(p.hits).padEnd(COL.aciertos),
+      ganadoresStr.padEnd(COL.ganadores),
+      premioIndStr.padEnd(COL.premioInd),
+      pozoTotal,
+    ].join(sep);
   }
 
   const MOD_ORDER = ['tradicional', 'segunda', 'revancha', 'siempre_sale', 'pozo_extra'];
@@ -274,11 +296,9 @@ function formatDrawSummary(drawResult) {
     if (key === 'pozo_extra') {
       lines.push(`⭐ *Pozo Extra* — Se calcula con la unión de Tradicional + La Segunda + Revancha`);
       if (mod.prizes && mod.prizes.length) {
+        lines.push(`   ${header}`);
         for (const p of mod.prizes) {
-          const g = p.winners === 0 ? 'Vacante' : `${p.winners} ganador${p.winners !== 1 ? 'es' : ''}`;
-          const totalPrize = getTotalPrizeString(p);
-          const porGanador = p.prize ? ` | ${p.prize} c/u` : '';
-          lines.push(`   Premio: ${totalPrize}${porGanador} (${g})`);
+          lines.push(`   ${row(p)}`);
         }
       }
       lines.push(``);
@@ -287,11 +307,9 @@ function formatDrawSummary(drawResult) {
     const nums = (mod.numbers || []).map(n => String(n).padStart(2, '0')).join(' - ');
     lines.push(`${icon} *${name}:* ${nums || '—'}`);
     if (mod.prizes && mod.prizes.length) {
+      lines.push(`   ${header}`);
       for (const p of mod.prizes) {
-        const g = p.winners === 0 ? 'Vacante' : `${p.winners} ganador${p.winners !== 1 ? 'es' : ''}`;
-        const totalPrize = getTotalPrizeString(p);
-        const porGanador = p.prize ? ` | ${p.prize} c/u` : '';
-        lines.push(`   ${p.hits} - ${g} | ${totalPrize}${porGanador}`);
+        lines.push(`   ${row(p)}`);
       }
     }
     lines.push(``);
