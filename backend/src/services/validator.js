@@ -265,7 +265,8 @@ function formatDrawSummary(drawResult) {
     if (mod.prizes && mod.prizes.length) {
       for (const p of mod.prizes) {
         const g = p.winners === 0 ? 'Vacante' : `${p.winners} ganador${p.winners !== 1 ? 'es' : ''}`;
-        lines.push(`   ${p.hits} aciertos → ${g} | ${p.prize || ''}`);
+        const porGanador = p.prizePerWinner ? ` | ${p.prizePerWinner} c/u` : '';
+        lines.push(`   ${p.hits} - ${g} | ${p.prize || ''}${porGanador}`);
       }
     }
     lines.push(``);
@@ -295,26 +296,36 @@ function buildUserResultsMessage(contestNumber, dateStr, ticketsWithResults, dra
       `📊 *Tus resultados — Sorteo N° ${contestNumber}* (${dateStr})`,
       ``,
     ];
-
-  const drawSummary = formatDrawSummary(drawResult);
-  if (drawSummary.length) {
-    lines.push(`📋 *Cómo terminó el sorteo*`, ``);
-    lines.push(...drawSummary);
-    lines.push(`━━━━━━━━━━━━━━━━━━`, `*Tus tickets*`, ``);
-  }
+  // Nota: se omite el resumen del sorteo (\"Cómo terminó el sorteo\") para que el mensaje sea más corto.
+  lines.push(`*Tus tickets*`, ``);
 
   const MOD_ORDER = ['tradicional', 'segunda', 'revancha', 'siempre_sale', 'pozo_extra'];
+
+  function formatPrizeYouReceive(prizeEntry) {
+    if (!prizeEntry) return '';
+    if (prizeEntry.prizePerWinner) return prizeEntry.prizePerWinner;
+
+    const winners = typeof prizeEntry.winners === 'number' ? prizeEntry.winners : null;
+    const amountRaw = typeof prizeEntry.prizeAmount === 'number' ? prizeEntry.prizeAmount : null;
+    if (!winners || winners <= 0 || !amountRaw) return prizeEntry.prize || '';
+
+    // Heurística: si el texto original tiene coma decimal, prizeAmount viene como centavos (parseMoneyString quita todo excepto dígitos).
+    const hasDecimalComma = typeof prizeEntry.prize === 'string' && prizeEntry.prize.includes(',');
+    const total = hasDecimalComma ? amountRaw / 100 : amountRaw;
+    const perWinner = total / winners;
+
+    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(perWinner);
+  }
 
   for (let i = 0; i < ticketsWithResults.length; i++) {
     const t = ticketsWithResults[i];
     const nums = (t.numbers_json || []).map(n => String(n).padStart(2, '0')).join(' - ');
     const labelPart = t.label ? ` — _${t.label}_` : '';
-    const tipoPart = t.tipo ? ` (${t.tipo === 'unico' ? 'Único' : 'Fijo'})` : '';
-    if (t.won_any_prize) {
-      lines.push(`━━━━━━━━━━━━━━━━━━`);
-      lines.push(`🎉 *GANASTE*`);
-    }
-    lines.push(`🎱 *Ticket ${i + 1}*${tipoPart}${labelPart}`);
+    const tipoText = t.tipo === 'unico' ? 'Único' : (t.tipo === 'fijo' ? 'Fijo' : null);
+    const tipoPart = tipoText ? ` (${tipoText})` : '';
+    const winBadge = t.won_any_prize ? ' | *GANADOR !!!!!!* 🎉 🎉' : '';
+    if (i > 0) lines.push(`━━━━━━━━━━━━━━━━━━`);
+    lines.push(`🎱 *Ticket ${i + 1}${tipoPart}${winBadge}*${labelPart}`);
     lines.push(`   ${nums}`);
     if (t.created_at) {
       lines.push(`   📅 Alta: ${formatDateDDMMYY(t.created_at)}`);
@@ -337,13 +348,8 @@ function buildUserResultsMessage(contestNumber, dateStr, ticketsWithResults, dra
       } else {
         const hits = res.hits != null ? res.hits : 0;
         if (res.won && res.prize) {
-          const perWinner = res.prize.prizePerWinner || '';
-          const totalPrize = res.prize.prize || '';
-          const winners = typeof res.prize.winners === 'number' ? res.prize.winners : null;
-          const winnersLabel = winners != null ? `${winners} ganador${winners !== 1 ? 'es' : ''}` : '';
-          const moneyLabel = perWinner || totalPrize;
-          const extra = [moneyLabel, winnersLabel].filter(Boolean).join(' — ');
-          lines.push(`   ${icon} ${name}: ${hits} aciertos — 🏆 *Ganaste*${extra ? ` (${extra})` : ''}`);
+          const money = formatPrizeYouReceive(res.prize);
+          lines.push(`   ${icon} ${name}: ${hits} aciertos — 🏆 *Ganaste*${money ? ` (${money})` : ''}`);
         } else {
           lines.push(`   ${icon} ${name}: ${hits} aciertos`);
         }

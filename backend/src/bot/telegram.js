@@ -957,7 +957,8 @@ function formatDrawMessage(drawRow) {
     if (mod.prizes?.length) {
       for (const p of mod.prizes) {
         const ganadores = p.winners === 0 ? 'Vacante' : `${p.winners} ganador${p.winners !== 1 ? 'es' : ''}`;
-        lines.push(`  ${p.hits} aciertos → ${ganadores} | ${p.prize}`);
+        const porGanador = p.prizePerWinner ? ` | ${p.prizePerWinner} c/u` : '';
+        lines.push(`  ${p.hits} - ${ganadores} | ${p.prize || ''}${porGanador}`);
       }
     }
 
