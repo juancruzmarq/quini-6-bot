@@ -18,7 +18,8 @@ const db   = require('../db');
 const log  = require('../logger');
 const { formatDateDDMMYY }   = require('../utils/dateFormat');
 const { fetchAndParseLatest } = require('./parser');
-const { validateTicket, buildUserResultsMessage } = require('./validator');
+const { buildUserResultsMessage } = require('./validator');
+const { getTicketsToValidateForDraw, runValidationForDraw } = require('./ticketValidation');
 
 // ── Configuración ─────────────────────────────────────────────────────────────
 
@@ -97,42 +98,13 @@ async function runFullCycle({ silent = false } = {}) {
     // ── Paso 2: Validar tickets ───────────────────────────────────────────────
     log.cron.info({ contestNumber }, 'Validando tickets...');
 
-    const drawRow    = (await db.query('SELECT * FROM quini_results WHERE contest_number = $1', [contestNumber])).rows[0];
-    const drawResult = drawRow.result_json;
+    const drawRow = (await db.query('SELECT * FROM quini_results WHERE contest_number = $1', [contestNumber])).rows[0];
 
-    // Solo tickets que existían el día del sorteo (created_at <= draw_date).
-    // Único: solo participa del próximo sorteo (máximo un ticket_result por ticket).
-    // Fijo: participa de todos los sorteos desde su alta.
-    const tickets = (await db.query(
-      `SELECT t.id, t.user_id, t.label, t.numbers_json, t.tipo,
-              u.telegram_chat_id, u.name
-       FROM tickets t
-       JOIN users u ON u.id = t.user_id
-       WHERE t.is_active = true AND u.is_active = true
-         AND t.created_at::date <= $1
-         AND (t.tipo = 'fijo' OR NOT EXISTS (SELECT 1 FROM ticket_results tr2 WHERE tr2.ticket_id = t.id))`,
-      [drawRow.draw_date]
-    )).rows;
+    const tickets = await getTicketsToValidateForDraw(db, drawRow.draw_date);
+    const { totalTickets, winnersCount } = await runValidationForDraw(db, contestNumber, drawRow, tickets);
 
-    let winners = 0;
-    for (const ticket of tickets) {
-      const already = await db.query(
-        'SELECT id FROM ticket_results WHERE ticket_id = $1 AND contest_number = $2',
-        [ticket.id, contestNumber]
-      );
-      if (already.rows.length > 0) continue;
-
-      const validation = validateTicket(ticket.numbers_json, drawResult);
-      await db.query(
-        `INSERT INTO ticket_results (ticket_id, contest_number, draw_date, won_any_prize, results_json)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [ticket.id, contestNumber, drawRow.draw_date, validation.wonAny, validation.results]
-      );
-      if (validation.wonAny) winners++;
-    }
-
-    log.cron.info({ totalTickets: tickets.length, winners, contestNumber }, 'Tickets validados');
-    result.validateResult = { totalTickets: tickets.length, winnersCount: winners };
+    log.cron.info({ totalTickets, winners: winnersCount, contestNumber }, 'Tickets validados');
+    result.validateResult = { totalTickets, winnersCount };
 
     // ── Paso 3: Enviar a cada usuario sus resultados (todos sus tickets y modalidades) ─
     if (!_botInstance) {

@@ -28,7 +28,8 @@ const TelegramBot = require('node-telegram-bot-api');
 const db          = require('../db');
 const log         = require('../logger');
 const { formatDateDDMMYY }            = require('../utils/dateFormat');
-const { buildUserResultsMessage }     = require('../services/validator');
+const { buildUserResultsMessage, validateTicket } = require('../services/validator');
+const { getTicketsToValidateForDraw } = require('../services/ticketValidation');
 const { validateAndNormalizeNumbers } = require('../routes/tickets');
 const { setBotInstance }              = require('../routes/notifications');
 
@@ -151,6 +152,15 @@ function initializeBot(app) {
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
 function registerHandlers(bot) {
+  /** Obtiene el usuario por chatId; si no está registrado envía el mensaje y devuelve null. */
+  async function requireUser(chatId) {
+    const user = await getUserByChatId(chatId);
+    if (!user) {
+      await bot.sendMessage(chatId, '❌ No estás registrado. Usá /start para unirte.');
+      return null;
+    }
+    return user;
+  }
 
   // /start [CODIGO] — Registro con código de invitación
   bot.onText(/\/start(.*)/, async (msg, match) => {
@@ -264,10 +274,8 @@ function registerHandlers(bot) {
     if (isRateLimited(chatId, 'add')) return;
 
     try {
-      const user = await getUserByChatId(chatId);
-      if (!user) {
-        return bot.sendMessage(chatId, '❌ No estás registrado. Usá /start para unirte.');
-      }
+      const user = await requireUser(chatId);
+      if (!user) return;
 
       const result = validateAndNormalizeNumbers(input.split(/[\s,]+/));
       if (!result.valid) {
@@ -332,10 +340,8 @@ function registerHandlers(bot) {
     if (isRateLimited(chatId, 'tickets')) return;
 
     try {
-      const user = await getUserByChatId(chatId);
-      if (!user) {
-        return bot.sendMessage(chatId, '❌ No estás registrado. Usá /start para unirte.');
-      }
+      const user = await requireUser(chatId);
+      if (!user) return;
 
       const { rows } = await db.query(
         `SELECT id, label, numbers_json, created_at, tipo
@@ -384,10 +390,8 @@ function registerHandlers(bot) {
     if (isRateLimited(chatId, 'delete')) return;
 
     try {
-      const user = await getUserByChatId(chatId);
-      if (!user) {
-        return bot.sendMessage(chatId, '❌ No estás registrado. Usá /start para unirte.');
-      }
+      const user = await requireUser(chatId);
+      if (!user) return;
 
       const { rows } = await db.query(
         `SELECT id, numbers_json FROM tickets
@@ -427,10 +431,8 @@ function registerHandlers(bot) {
     if (isRateLimited(chatId, 'ultimo')) return;
 
     try {
-      const user = await getUserByChatId(chatId);
-      if (!user) {
-        return bot.sendMessage(chatId, '❌ No estás registrado. Usá /start para unirte.');
-      }
+      const user = await requireUser(chatId);
+      if (!user) return;
 
       const { rows } = await db.query(
         'SELECT * FROM quini_results ORDER BY draw_date DESC LIMIT 1'
@@ -454,10 +456,8 @@ function registerHandlers(bot) {
     if (isRateLimited(chatId, 'sorteo')) return;
 
     try {
-      const user = await getUserByChatId(chatId);
-      if (!user) {
-        return bot.sendMessage(chatId, '❌ No estás registrado. Usá /start para unirte.');
-      }
+      const user = await requireUser(chatId);
+      if (!user) return;
 
       let draw = null;
 
@@ -593,7 +593,9 @@ function registerHandlers(bot) {
     }
   });
 
-  // /testresultado — Admin: vista previa del mensaje de resultados (tus tickets, último sorteo)
+  // /testresultado — Admin: vista previa del mensaje de resultados (tus tickets, último sorteo).
+  // Calcula en el momento qué tickets participarían (created_at <= draw_date) y simula la validación,
+  // así funciona aunque aún no existan ticket_results en la DB.
   bot.onText(/\/testresultado/, async (msg) => {
     const chatId = String(msg.chat.id);
     if (!isAdmin(chatId)) return;
@@ -608,29 +610,31 @@ function registerHandlers(bot) {
         return bot.sendMessage(chatId, '📭 No hay ningún sorteo guardado. Ejecutá /runcycle para obtener uno.');
       }
 
-      const rows = (await db.query(
-        `SELECT t.id, t.label, t.numbers_json, t.tipo, t.created_at, tr.results_json, tr.won_any_prize
-         FROM ticket_results tr
-         JOIN tickets t ON t.id = tr.ticket_id
-         JOIN users   u ON u.id = t.user_id
-         WHERE u.telegram_chat_id = $1 AND tr.contest_number = $2
-         ORDER BY t.id`,
-        [chatId, lastDraw.contest_number]
-      )).rows;
+      const user = await requireUser(chatId);
+      if (!user) return;
 
-      if (!rows.length) {
-        return bot.sendMessage(chatId, `No tenés tickets validados para el último sorteo (N° ${lastDraw.contest_number}). Agregá tickets con /add y volvé a probar.`);
+      const tickets = await getTicketsToValidateForDraw(db, lastDraw.draw_date, { userId: user.id });
+
+      if (!tickets.length) {
+        return bot.sendMessage(chatId, [
+          `No tenés tickets que participen del sorteo N° ${lastDraw.contest_number} (${formatDateDDMMYY(lastDraw.draw_date)}).`,
+          ``,
+          `Un ticket participa si su *fecha de alta* es ≤ fecha del sorteo. Agregá tickets con /add o revisá las fechas.`,
+        ].join('\n'), { parse_mode: 'Markdown' });
       }
 
       const dateStr = formatDateDDMMYY(lastDraw.result_json?.drawDateRaw || lastDraw.draw_date);
-      const userTickets = rows.map(r => ({
-        label: r.label,
-        numbers_json: r.numbers_json,
-        tipo: r.tipo,
-        results_json: r.results_json,
-        won_any_prize: r.won_any_prize,
-        created_at: r.created_at,
-      }));
+      const userTickets = tickets.map(t => {
+        const { wonAny, results } = validateTicket(t.numbers_json, lastDraw.result_json);
+        return {
+          label: t.label,
+          numbers_json: t.numbers_json,
+          tipo: t.tipo,
+          results_json: results,
+          won_any_prize: wonAny,
+          created_at: t.created_at,
+        };
+      });
       const message = buildUserResultsMessage(lastDraw.contest_number, dateStr, userTickets, lastDraw.result_json);
       await bot.sendMessage(chatId, `🧪 *Test — así se enviaría tu resultado:*\n\n${message}`, { parse_mode: 'Markdown' });
     } catch (err) {
@@ -645,10 +649,8 @@ function registerHandlers(bot) {
     if (isRateLimited(chatId, 'resultado')) return;
 
     try {
-      const user = await getUserByChatId(chatId);
-      if (!user) {
-        return bot.sendMessage(chatId, '❌ No estás registrado. Usá /start para unirte.');
-      }
+      const user = await requireUser(chatId);
+      if (!user) return;
 
       const lastDraw = (await db.query('SELECT * FROM quini_results ORDER BY draw_date DESC LIMIT 1')).rows[0];
       if (!lastDraw) {
@@ -713,10 +715,8 @@ function registerHandlers(bot) {
     if (isRateLimited(chatId, 'historial')) return;
 
     try {
-      const user = await getUserByChatId(chatId);
-      if (!user) {
-        return bot.sendMessage(chatId, '❌ No estás registrado. Usá /start para unirte.');
-      }
+      const user = await requireUser(chatId);
+      if (!user) return;
 
       const rows = (await db.query(
         'SELECT contest_number, draw_date FROM quini_results ORDER BY draw_date DESC LIMIT 10'
@@ -749,10 +749,8 @@ function registerHandlers(bot) {
     }
 
     try {
-      const user = await getUserByChatId(chatId);
-      if (!user) {
-        return bot.sendMessage(chatId, '❌ No estás registrado. Usá /start para unirte.');
-      }
+      const user = await requireUser(chatId);
+      if (!user) return;
 
       await ensureReminderColumn();
       const current = user.reminder_enabled !== false;

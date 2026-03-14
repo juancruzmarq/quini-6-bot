@@ -2,7 +2,7 @@ const express  = require('express');
 const db       = require('../db');
 const log      = require('../logger');
 const { fetchAndParseLatest, fetchDebugInfo } = require('../services/parser');
-const { validateTicket }                      = require('../services/validator');
+const { getTicketsToValidateForDraw, runValidationForDraw } = require('../services/ticketValidation');
 
 const router = express.Router();
 
@@ -142,51 +142,17 @@ router.post('/:contestNumber/validate-tickets', async (req, res, next) => {
       });
     }
 
-    const draw       = drawRes.rows[0];
-    const drawResult = draw.result_json;
+    const draw   = drawRes.rows[0];
+    const tickets = await getTicketsToValidateForDraw(db, draw.draw_date);
+    const { totalTickets, winnersCount } = await runValidationForDraw(db, contestNumber, draw, tickets);
 
-    // Solo tickets que existían el día del sorteo; único = solo si aún no tiene resultado
-    const ticketsRes = await db.query(
-      `SELECT t.id, t.user_id, t.label, t.numbers_json, t.tipo,
-              u.telegram_chat_id, u.name, u.telegram_username
-       FROM tickets t
-       JOIN users u ON u.id = t.user_id
-       WHERE t.is_active = true AND u.is_active = true
-         AND t.created_at::date <= $1
-         AND (t.tipo = 'fijo' OR NOT EXISTS (SELECT 1 FROM ticket_results tr2 WHERE tr2.ticket_id = t.id))`,
-      [draw.draw_date]
-    );
-
-    const tickets = ticketsRes.rows;
-    let   winners = 0;
-
-    for (const ticket of tickets) {
-      // Saltar si ya se validó este ticket para este sorteo
-      const alreadyDone = await db.query(
-        'SELECT id FROM ticket_results WHERE ticket_id = $1 AND contest_number = $2',
-        [ticket.id, contestNumber]
-      );
-      if (alreadyDone.rows.length > 0) continue;
-
-      const validation = validateTicket(ticket.numbers_json, drawResult);
-
-      await db.query(
-        `INSERT INTO ticket_results
-           (ticket_id, contest_number, draw_date, won_any_prize, results_json)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [ticket.id, contestNumber, draw.draw_date, validation.wonAny, validation.results]
-      );
-
-      if (validation.wonAny) winners++;
-    }
-
-    log.api.info({ contestNumber, totalTickets: tickets.length, winners }, 'Validación completada');
+    log.api.info({ contestNumber, totalTickets, winners: winnersCount }, 'Validación completada');
 
     res.json({
       success:       true,
       contestNumber,
-      totalTickets:  tickets.length,
-      winnersCount:  winners,
+      totalTickets,
+      winnersCount,
     });
   } catch (err) {
     next(err);
