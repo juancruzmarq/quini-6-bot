@@ -265,30 +265,6 @@ function formatDrawSummary(drawResult) {
     return formatArs(perAmount * winners);
   }
 
-  const COL = { aciertos: 10, ganadores: 12, premioInd: 22, pozo: 22 };
-  const sep = ' | ';
-  const header = [
-    'aciertos'.padEnd(COL.aciertos),
-    'ganadores'.padEnd(COL.ganadores),
-    'premio individual'.padEnd(COL.premioInd),
-    'pozo'.padEnd(COL.pozo),
-  ].join(sep);
-
-  function row(p) {
-    const winners = typeof p.winners === 'number' ? p.winners : null;
-    const isVacante = !winners || winners === 0;
-    const ganadoresStr = isVacante ? 'Vacante' : String(winners);
-    const pozoTotal = getTotalPrizeString(p);
-    const perAmount = parsePrizeAmount(p);
-    const premioIndStr = isVacante ? '' : (perAmount != null ? formatArs(perAmount) : (p.prize || ''));
-    return [
-      String(p.hits).padEnd(COL.aciertos),
-      ganadoresStr.padEnd(COL.ganadores),
-      premioIndStr.padEnd(COL.premioInd),
-      pozoTotal.padEnd(COL.pozo),
-    ].join(sep);
-  }
-
   const MOD_ORDER = ['tradicional', 'segunda', 'revancha', 'siempre_sale', 'pozo_extra'];
   for (const key of MOD_ORDER) {
     const mod = drawResult.modalities[key];
@@ -296,12 +272,14 @@ function formatDrawSummary(drawResult) {
     const icon = MODALITY_ICONS[key];
     const name = MODALITY_NAMES[key];
     if (key === 'pozo_extra') {
-      lines.push(`⭐ *Pozo Extra* — Se calcula con la unión de Tradicional + La Segunda + Revancha`);
+      lines.push(`⭐ *Pozo Extra* — Tradicional + La Segunda + Revancha`);
       if (mod.prizes && mod.prizes.length) {
-        lines.push('```');
-        lines.push(header);
-        for (const p of mod.prizes) lines.push(row(p));
-        lines.push('```');
+        for (const p of mod.prizes) {
+          const g = p.winners === 0 ? 'Vacante' : `${p.winners} gan`;
+          const total = getTotalPrizeString(p);
+          const cuStr = !p.winners ? '' : (parsePrizeAmount(p) != null ? ` · ${formatArs(parsePrizeAmount(p))} c/u` : '');
+          lines.push(`   ${g} · ${total}${cuStr}`);
+        }
       }
       lines.push(``);
       continue;
@@ -309,10 +287,11 @@ function formatDrawSummary(drawResult) {
     const nums = (mod.numbers || []).map(n => String(n).padStart(2, '0')).join(' - ');
     lines.push(`${icon} *${name}:* ${nums || '—'}`);
     if (mod.prizes && mod.prizes.length) {
-      lines.push('```');
-      lines.push(header);
-      for (const p of mod.prizes) lines.push(row(p));
-      lines.push('```');
+      for (const p of mod.prizes) {
+        const g = p.winners === 0 ? 'Vacante' : `${p.winners} gan`;
+        const cuStr = !p.winners ? '' : (parsePrizeAmount(p) != null ? ` · ${formatArs(parsePrizeAmount(p))} c/u` : '');
+        lines.push(`   ${p.hits} aciertos · ${g} · ${getTotalPrizeString(p)}${cuStr}`);
+      }
     }
     lines.push(``);
   }
@@ -375,7 +354,8 @@ function buildUserResultsMessage(contestNumber, dateStr, ticketsWithResults, dra
     const tipoText = t.tipo === 'unico' ? 'Único' : (t.tipo === 'fijo' ? 'Fijo' : null);
     const tipoPart = tipoText ? ` (${tipoText})` : '';
     const winBadge = t.won_any_prize ? ' | *GANADOR !!!!!!* 🎉 🎉' : '';
-    if (i > 0) lines.push(`━━━━━━━━━━━━━━━━━━`);
+    if (i > 0) lines.push(``);
+    lines.push(`━━━━━━━━━━━━━━━━━━`);
     lines.push(`🎱 *Ticket ${i + 1}${tipoPart}${winBadge}*${labelPart}`);
     lines.push(`   ${nums}`);
     if (t.created_at) {

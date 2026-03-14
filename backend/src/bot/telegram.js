@@ -964,30 +964,6 @@ function formatDrawMessage(drawRow) {
     return formatArs(perAmount * winners);
   }
 
-  const COL = { aciertos: 10, ganadores: 12, premioInd: 22, pozo: 22 };
-  const sep = ' | ';
-  const tableHeader = [
-    'aciertos'.padEnd(COL.aciertos),
-    'ganadores'.padEnd(COL.ganadores),
-    'premio individual'.padEnd(COL.premioInd),
-    'pozo'.padEnd(COL.pozo),
-  ].join(sep);
-
-  function prizeRow(p) {
-    const winners = typeof p.winners === 'number' ? p.winners : null;
-    const isVacante = !winners || winners === 0;
-    const ganadoresStr = isVacante ? 'Vacante' : String(winners);
-    const pozoTotal = getTotalPrizeString(p);
-    const perAmount = parsePrizeAmount(p);
-    const premioIndStr = isVacante ? '' : (perAmount != null ? formatArs(perAmount) : (p.prize || ''));
-    return [
-      String(p.hits).padEnd(COL.aciertos),
-      ganadoresStr.padEnd(COL.ganadores),
-      premioIndStr.padEnd(COL.premioInd),
-      pozoTotal.padEnd(COL.pozo),
-    ].join(sep);
-  }
-
   for (const key of ORDER) {
     const mod = r.modalities?.[key];
     if (!mod) continue;
@@ -996,13 +972,19 @@ function formatDrawMessage(drawRow) {
     const numbers = mod.numbers?.length ? mod.numbers.join(' - ') : '—';
 
     lines.push(`*${label}*`);
-    lines.push(`📜 | ${numbers} |`);
+    lines.push(`📜 ${numbers}`);
 
     if (mod.prizes?.length) {
-      lines.push('```');
-      lines.push(tableHeader);
-      for (const p of mod.prizes) lines.push(prizeRow(p));
-      lines.push('```');
+      for (const p of mod.prizes) {
+        const g = p.winners === 0 ? 'Vacante' : `${p.winners} gan`;
+        const total = getTotalPrizeString(p);
+        const cuStr = !p.winners ? '' : (parsePrizeAmount(p) != null ? ` · ${formatArs(parsePrizeAmount(p))} c/u` : '');
+        if (key === 'pozo_extra') {
+          lines.push(`   ${g} · ${total}${cuStr}`);
+        } else {
+          lines.push(`   ${p.hits} aciertos · ${g} · ${total}${cuStr}`);
+        }
+      }
     }
 
     lines.push('');
