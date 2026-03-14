@@ -244,8 +244,9 @@ function formatDrawSummary(drawResult) {
     lines.push(`💰 *Pozo acumulado:* ${drawResult.jackpot}`, ``);
   }
 
+  const fmtArsOpts = { style: 'currency', currency: 'ARS', maximumFractionDigits: 0, minimumFractionDigits: 0 };
   function formatArs(amount) {
-    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount);
+    return new Intl.NumberFormat('es-AR', fmtArsOpts).format(amount);
   }
 
   function parsePrizeAmount(prizeEntry) {
@@ -259,17 +260,18 @@ function formatDrawSummary(drawResult) {
   function getTotalPrizeString(p) {
     const winners = typeof p?.winners === 'number' ? p.winners : null;
     const perAmount = parsePrizeAmount(p);
-    if (!winners || winners <= 0 || !perAmount) return p?.prize || '';
+    if (!perAmount) return p?.prize || '';
+    if (!winners || winners <= 0) return formatArs(perAmount); // Vacante: pozo total sin centavos
     return formatArs(perAmount * winners);
   }
 
-  const COL = { aciertos: 10, ganadores: 12, premioInd: 24, pozo: 22 };
+  const COL = { aciertos: 10, ganadores: 12, premioInd: 22, pozo: 22 };
   const sep = ' | ';
   const header = [
     'aciertos'.padEnd(COL.aciertos),
     'ganadores'.padEnd(COL.ganadores),
     'premio individual'.padEnd(COL.premioInd),
-    'pozo',
+    'pozo'.padEnd(COL.pozo),
   ].join(sep);
 
   function row(p) {
@@ -277,13 +279,13 @@ function formatDrawSummary(drawResult) {
     const isVacante = !winners || winners === 0;
     const ganadoresStr = isVacante ? 'Vacante' : String(winners);
     const pozoTotal = getTotalPrizeString(p);
-    const premioPorGanador = p.prize || '';
-    const premioIndStr = isVacante ? '' : premioPorGanador;
+    const perAmount = parsePrizeAmount(p);
+    const premioIndStr = isVacante ? '' : (perAmount != null ? formatArs(perAmount) : (p.prize || ''));
     return [
       String(p.hits).padEnd(COL.aciertos),
       ganadoresStr.padEnd(COL.ganadores),
       premioIndStr.padEnd(COL.premioInd),
-      pozoTotal,
+      pozoTotal.padEnd(COL.pozo),
     ].join(sep);
   }
 
@@ -296,10 +298,10 @@ function formatDrawSummary(drawResult) {
     if (key === 'pozo_extra') {
       lines.push(`⭐ *Pozo Extra* — Se calcula con la unión de Tradicional + La Segunda + Revancha`);
       if (mod.prizes && mod.prizes.length) {
-        lines.push(`   ${header}`);
-        for (const p of mod.prizes) {
-          lines.push(`   ${row(p)}`);
-        }
+        lines.push('```');
+        lines.push(header);
+        for (const p of mod.prizes) lines.push(row(p));
+        lines.push('```');
       }
       lines.push(``);
       continue;
@@ -307,10 +309,10 @@ function formatDrawSummary(drawResult) {
     const nums = (mod.numbers || []).map(n => String(n).padStart(2, '0')).join(' - ');
     lines.push(`${icon} *${name}:* ${nums || '—'}`);
     if (mod.prizes && mod.prizes.length) {
-      lines.push(`   ${header}`);
-      for (const p of mod.prizes) {
-        lines.push(`   ${row(p)}`);
-      }
+      lines.push('```');
+      lines.push(header);
+      for (const p of mod.prizes) lines.push(row(p));
+      lines.push('```');
     }
     lines.push(``);
   }
@@ -363,7 +365,7 @@ function buildUserResultsMessage(contestNumber, dateStr, ticketsWithResults, dra
     const total = hasDecimalComma ? amountRaw / 100 : amountRaw;
     const perWinner = total / winners;
 
-    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(perWinner);
+    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0, minimumFractionDigits: 0 }).format(perWinner);
   }
 
   for (let i = 0; i < ticketsWithResults.length; i++) {

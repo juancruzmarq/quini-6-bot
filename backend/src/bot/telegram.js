@@ -944,8 +944,9 @@ function formatDrawMessage(drawRow) {
 
   const ORDER = ['tradicional', 'segunda', 'revancha', 'siempre_sale', 'pozo_extra'];
 
+  const fmtArsOpts = { style: 'currency', currency: 'ARS', maximumFractionDigits: 0, minimumFractionDigits: 0 };
   function formatArs(amount) {
-    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount);
+    return new Intl.NumberFormat('es-AR', fmtArsOpts).format(amount);
   }
 
   function parsePrizeAmount(prizeEntry) {
@@ -958,17 +959,18 @@ function formatDrawMessage(drawRow) {
   function getTotalPrizeString(p) {
     const winners = typeof p?.winners === 'number' ? p.winners : null;
     const perAmount = parsePrizeAmount(p);
-    if (!winners || winners <= 0 || !perAmount) return p?.prize || '';
+    if (!perAmount) return p?.prize || '';
+    if (!winners || winners <= 0) return formatArs(perAmount);
     return formatArs(perAmount * winners);
   }
 
-  const COL = { aciertos: 10, ganadores: 12, premioInd: 24, pozo: 22 };
+  const COL = { aciertos: 10, ganadores: 12, premioInd: 22, pozo: 22 };
   const sep = ' | ';
   const tableHeader = [
     'aciertos'.padEnd(COL.aciertos),
     'ganadores'.padEnd(COL.ganadores),
     'premio individual'.padEnd(COL.premioInd),
-    'pozo',
+    'pozo'.padEnd(COL.pozo),
   ].join(sep);
 
   function prizeRow(p) {
@@ -976,13 +978,13 @@ function formatDrawMessage(drawRow) {
     const isVacante = !winners || winners === 0;
     const ganadoresStr = isVacante ? 'Vacante' : String(winners);
     const pozoTotal = getTotalPrizeString(p);
-    const premioPorGanador = p.prize || '';
-    const premioIndStr = isVacante ? '' : premioPorGanador;
+    const perAmount = parsePrizeAmount(p);
+    const premioIndStr = isVacante ? '' : (perAmount != null ? formatArs(perAmount) : (p.prize || ''));
     return [
       String(p.hits).padEnd(COL.aciertos),
       ganadoresStr.padEnd(COL.ganadores),
       premioIndStr.padEnd(COL.premioInd),
-      pozoTotal,
+      pozoTotal.padEnd(COL.pozo),
     ].join(sep);
   }
 
@@ -997,10 +999,10 @@ function formatDrawMessage(drawRow) {
     lines.push(`📜 | ${numbers} |`);
 
     if (mod.prizes?.length) {
-      lines.push(`  ${tableHeader}`);
-      for (const p of mod.prizes) {
-        lines.push(`  ${prizeRow(p)}`);
-      }
+      lines.push('```');
+      lines.push(tableHeader);
+      for (const p of mod.prizes) lines.push(prizeRow(p));
+      lines.push('```');
     }
 
     lines.push('');
