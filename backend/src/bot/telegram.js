@@ -105,9 +105,11 @@ function initializeBot(app) {
         throw new Error('Webhook configurado pero no se pasó la app Express. Pasa app a initializeBot(app).');
       }
       app.post(WEBHOOK_PATH, (req, res) => {
-        bot.processUpdate(req.body).catch((err) => {
+        try {
+          bot.processUpdate(req.body);
+        } catch (err) {
           log.bot.error({ err: err.message }, 'Error procesando update');
-        });
+        }
         res.sendStatus(200);
       });
       bot.setWebHook(webhookUrl).then(() => {
