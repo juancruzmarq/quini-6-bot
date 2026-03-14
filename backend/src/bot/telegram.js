@@ -70,24 +70,39 @@ function setRunCycleHandler(fn) {
 
 const WEBHOOK_PATH = '/telegram-webhook';
 
+function resolveWebhookUrl() {
+  const explicit = process.env.TELEGRAM_WEBHOOK_URL && process.env.TELEGRAM_WEBHOOK_URL.trim();
+  if (explicit) return explicit;
+  const domain = process.env.RAILWAY_PUBLIC_DOMAIN && process.env.RAILWAY_PUBLIC_DOMAIN.trim();
+  if (domain) return `https://${domain.replace(/^https?:\/\//, '').replace(/\/$/, '')}${WEBHOOK_PATH}`;
+  return null;
+}
+
 /**
- * Inicializa el bot. Si TELEGRAM_WEBHOOK_URL está definido, usa webhook (recomendado en producción).
- * Si no, usa polling (solo una instancia debe estar corriendo).
- * @param {object} [app] - Instancia de Express; obligatorio si usás webhook, para registrar la ruta POST.
+ * Inicializa el bot. En producción (o con TELEGRAM_WEBHOOK_URL / RAILWAY_PUBLIC_DOMAIN) usa webhook.
+ * Solo en desarrollo sin webhook usa polling (una sola instancia).
+ * @param {object} [app] - Instancia de Express; obligatoria con webhook.
  */
 function initializeBot(app) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  const webhookUrl = process.env.TELEGRAM_WEBHOOK_URL && process.env.TELEGRAM_WEBHOOK_URL.trim();
+  const isProduction = process.env.NODE_ENV === 'production';
+  const webhookUrl = resolveWebhookUrl();
 
   if (!bot) {
     const useWebhook = Boolean(webhookUrl);
-    bot = new TelegramBot(token, { polling: !useWebhook });
+    const usePolling = !useWebhook && !isProduction;
+
+    if (isProduction && !useWebhook) {
+      log.bot.warn('Producción sin webhook: definí TELEGRAM_WEBHOOK_URL o asegurate de tener RAILWAY_PUBLIC_DOMAIN. El bot no recibirá mensajes hasta configurar webhook.');
+    }
+
+    bot = new TelegramBot(token, { polling: usePolling });
     registerHandlers(bot);
     setBotInstance(bot);
 
     if (useWebhook) {
       if (!app) {
-        throw new Error('TELEGRAM_WEBHOOK_URL está definido pero no se pasó la app Express. Pasa app a initializeBot(app).');
+        throw new Error('Webhook configurado pero no se pasó la app Express. Pasa app a initializeBot(app).');
       }
       app.post(WEBHOOK_PATH, (req, res) => {
         bot.processUpdate(req.body).catch((err) => {
@@ -100,8 +115,8 @@ function initializeBot(app) {
       }).catch((err) => {
         log.bot.error({ err: err.message }, 'Error configurando webhook');
       });
-    } else {
-      log.bot.info('Bot en modo polling (solo una instancia debe correr con este token)');
+    } else if (usePolling) {
+      log.bot.info('Bot en modo polling (solo una instancia con este token)');
     }
 
     if (INVITE_CODE) log.bot.info('Código de invitación activo');
