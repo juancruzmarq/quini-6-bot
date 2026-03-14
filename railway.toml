@@ -1,0 +1,11 @@
+# Configuración para despliegue en Railway
+# https://docs.railway.app/deploy/config-as-code
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile.railway"
+
+[deploy]
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+startCommand = "node src/index.js"

@@ -256,6 +256,46 @@ Notify Winners (Telegram)
 
 ---
 
+# 🚂 Despliegue en Railway
+
+El proyecto está preparado para desplegarse en [Railway](https://railway.app) con deploy automático desde este repositorio.
+
+## Requisitos
+
+- Cuenta en Railway (plan con PostgreSQL).
+- Repositorio en GitHub/GitLab conectado a Railway.
+
+## Pasos
+
+1. **Crear un proyecto en Railway** y conectar este repositorio (Deploy from GitHub repo).
+
+2. **Añadir PostgreSQL** al proyecto: en el dashboard, *New* → *Database* → *PostgreSQL*. Railway inyecta `DATABASE_URL` en las variables del servicio.
+
+3. **Configurar el servicio del backend**:
+   - **Root Directory**: dejar vacío (el build usa la raíz).
+   - **Builder**: el `railway.toml` y `Dockerfile.railway` en la raíz ya indican usar Dockerfile; Railway usará `Dockerfile.railway` para construir la imagen.
+   - **Variables de entorno** (Settings → Variables):
+
+   | Variable | Descripción |
+   |----------|-------------|
+   | `DATABASE_URL` | Inyectada por Railway al enlazar PostgreSQL (no hace falta crearla a mano). |
+   | `TELEGRAM_BOT_TOKEN` | Token del bot de Telegram (obligatorio para el bot). |
+   | `ADMIN_TELEGRAM_ID` | ID de Telegram del admin (comandos `/runcycle`, `/status`, `/broadcast`). |
+   | `INVITE_CODE` | Código para registrarse con `/start CODIGO`. |
+   | `MAX_TICKETS_PER_USER` | (Opcional) Límite de tickets por usuario; por defecto 10. |
+   | `PORT` | Lo asigna Railway; no suele hacer falta definirlo. |
+
+4. **Schema de la base de datos**: en el primer arranque, si la tabla `users` no existe, el backend ejecuta automáticamente el contenido de `backend/src/db/schema.sql`. No hace falta correr migraciones a mano.
+
+5. **Deploy**: cada push a la rama conectada (por ejemplo `main`) dispara un nuevo build y deploy. Los logs se ven en el panel de Railway.
+
+## Archivos de configuración
+
+- **`railway.toml`**: builder Dockerfile, ruta del Dockerfile, política de reinicio.
+- **`Dockerfile.railway`**: construye desde `backend/` e inicia con `node src/index.js`.
+
+---
+
 # 🛠 Tecnologías utilizadas
 
 - **Node.js** (Express) — API, parser HTML y lógica de validación

@@ -42,30 +42,37 @@ app.use((err, _req, res, _next) => {
 // Migración: columna recordatorio (bases existentes)
 db.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS reminder_enabled BOOLEAN DEFAULT TRUE').catch(() => {});
 
-app.listen(PORT, () => {
-  console.log(`🚀 Quini Backend corriendo en puerto ${PORT}`);
-});
+async function start() {
+  await db.runSchemaIfNeeded();
 
-// ── Telegram Bot ──────────────────────────────────────────────────────────────
-const botToken           = process.env.TELEGRAM_BOT_TOKEN || '';
-const tokenParecePvalido = botToken.length > 20 && botToken.includes(':');
+  app.listen(PORT, () => {
+    console.log(`🚀 Quini Backend corriendo en puerto ${PORT}`);
+  });
 
-if (tokenParecePvalido) {
-  try {
-    const { initializeBot, setRunCycleHandler } = require('./bot/telegram');
-    const bot = initializeBot();
-    setBotForCron(bot);
-    setAdminChatId(process.env.ADMIN_TELEGRAM_ID);
-    setRunCycleHandler(runFullCycle);
-    console.log('🤖 Bot de Telegram iniciado');
-  } catch (err) {
-    console.error('Error iniciando bot de Telegram:', err.message);
+  const botToken           = process.env.TELEGRAM_BOT_TOKEN || '';
+  const tokenParecePvalido = botToken.length > 20 && botToken.includes(':');
+
+  if (tokenParecePvalido) {
+    try {
+      const { initializeBot, setRunCycleHandler } = require('./bot/telegram');
+      const bot = initializeBot();
+      setBotForCron(bot);
+      setAdminChatId(process.env.ADMIN_TELEGRAM_ID);
+      setRunCycleHandler(runFullCycle);
+      console.log('🤖 Bot de Telegram iniciado');
+    } catch (err) {
+      console.error('Error iniciando bot de Telegram:', err.message);
+    }
+  } else {
+    console.warn('⚠️  TELEGRAM_BOT_TOKEN no configurado — bot deshabilitado');
   }
-} else {
-  console.warn('⚠️  TELEGRAM_BOT_TOKEN no configurado — bot deshabilitado');
+
+  initializeCron();
 }
 
-// ── Cron scheduler ────────────────────────────────────────────────────────────
-initializeCron();
+start().catch((err) => {
+  console.error('Error al iniciar:', err);
+  process.exit(1);
+});
 
 module.exports = app;
