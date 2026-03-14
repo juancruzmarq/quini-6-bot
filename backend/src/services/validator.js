@@ -7,10 +7,9 @@ const { formatDateDDMMYY } = require('../utils/dateFormat');
  *   - tradicional:  gana con 4, 5 o 6 aciertos
  *   - segunda:      gana con 4, 5 o 6 aciertos
  *   - revancha:     gana solo con 6 aciertos
- *   - siempre_sale: gana solo con 5 aciertos
- *   - pozo_extra:   los 6 números del ticket deben estar dentro de la unión
- *                   de los números de tradicional + segunda + revancha,
- *                   y el ticket NO debe haber ganado en ninguna otra modalidad.
+ *   - siempre_sale: gana con 5 o 6 aciertos (Art. 29°: se premia el mayor nivel con ganadores)
+ *   - pozo_extra:   los 6 números del ticket en la unión de tradicional + segunda + revancha (Art. 30°).
+ *                   No participa si ya ganó en Tradicional, La Segunda o Revancha (no excluye Siempre Sale).
  */
 
 /**
@@ -48,22 +47,23 @@ function validateTicket(ticketNumbers, drawResult) {
   );
 
   // ── Siempre Sale ───────────────────────────────────────────────────────────
+  // Art. 29°: se premia 6 aciertos; si no hay, 5 aciertos
   results.siempre_sale = checkModality(
     normalized,
     modalities.siempre_sale,
-    [5]
+    [5, 6]
   );
 
   // ── Pozo Extra ─────────────────────────────────────────────────────────────
-  // Solo participa si NO ganó en ninguna otra modalidad
-  const wonOtherModality = Object.values(results).some(r => r.won);
+  // Art. 30°: excluidas apuestas con 6 aciertos en Tradicional, La Segunda o Revancha (no Siempre Sale)
+  const wonTradSegundaRevancha = [results.tradicional, results.segunda, results.revancha].some(r => r && r.won);
 
-  if (!wonOtherModality) {
+  if (!wonTradSegundaRevancha) {
     results.pozo_extra = checkPozoExtra(normalized, modalities);
   } else {
     results.pozo_extra = {
       won:              false,
-      reason:           'Ticket ganó en otra modalidad — no participa del Pozo Extra',
+      reason:           'Ticket ganó en Tradicional, La Segunda o Revancha — no participa del Pozo Extra',
       inUnion:          false,
       unionSize:        0,
     };

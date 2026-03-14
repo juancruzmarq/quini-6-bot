@@ -855,7 +855,7 @@ function registerHandlers(bot) {
       `Ganás con 5 aciertos. Hay premio asegurado en cada sorteo.`,
       ``,
       `*⭐ Pozo Extra*`,
-      `Se arma con la unión de los números de Tradicional + La Segunda + Revancha (sin repetir). Ganás si tus 6 números están todos dentro de esa unión. _No participás si ya ganaste en otra modalidad._`,
+      `Se arma con la unión de los números de Tradicional + La Segunda + Revancha (sin repetir). Ganás si tus 6 números están todos dentro de esa unión. _No participás si ya ganaste en Tradicional, La Segunda o Revancha_ (sí podés si ganaste solo en Siempre Sale).`,
       ``,
       `En el mensaje de resultados, cada línea es: _aciertos · ganadores · pozo total · premio por ganador._`,
     ].join('\n'), { parse_mode: 'Markdown' });
