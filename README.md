@@ -2,7 +2,7 @@
 
 Sistema automatizado para **obtener resultados del Quini 6, procesarlos, validar tickets de usuarios y notificar si ganaron**.
 
-El proyecto utiliza **n8n** para orquestar workflows, **PostgreSQL** para almacenar datos y **Telegram** como canal principal de comunicación con los usuarios.
+El proyecto utiliza **Node.js** (Express + node-cron) para el backend y la automatización, **PostgreSQL** para almacenar datos y **Telegram** como canal principal de comunicación con los usuarios.
 
 ---
 
@@ -20,17 +20,20 @@ Automatizar el proceso de:
 ---
 
 # 🧠 Arquitectura del sistema
-n8n Workflow
-(Fetch + Parse HTML)
+
+```
+Backend (Node.js + Express)
+│
+├── Cron (node-cron): mié/dom 21:15–21:55 cada 5 min → fetch + parse + guardar + validar + notificar
+├── Cron 22:00 → alerta al admin si no se obtuvo el resultado
+├── Cron mar/sáb 20:00 → recordatorio "mañana es sorteo"
 │
 ▼
-PostgreSQL Database
+PostgreSQL
 │
 ▼
-Ticket Validation Engine
-│
-▼
-Telegram Notifications
+Bot de Telegram (comandos + notificaciones)
+```
 
 
 ---
@@ -153,6 +156,7 @@ name
 telegram_chat_id
 telegram_username
 is_active
+reminder_enabled
 created_at
 updated_at
 
@@ -171,18 +175,20 @@ updated_at
 ## Ejemplo de números:
 
 ["09","11","12","14","18","20"]
-quini_results
 
-## Resultados de cada sorteo.
+## quini_results
+
+Resultados de cada sorteo.
 
 id
 contest_number
 draw_date
 result_json
 created_at
-ticket_results
 
-## Resultado de cada ticket contra cada sorteo.
+## ticket_results
+
+Resultado de cada ticket contra cada sorteo.
 
 id
 ticket_id
@@ -193,111 +199,66 @@ results_json
 created_at
 
 
-# ⚙️ Workflows n8n
+# ⚙️ Automatización (cron en el backend)
 
+El backend usa **node-cron** para ejecutar el ciclo completo en miércoles y domingos:
 
-## Workflow 1 — Obtener resultado del sorteo
+1. **21:15 a 21:55** (cada 5 min): intenta obtener el resultado del sitio, parsea el HTML, guarda en DB, valida todos los tickets activos y notifica por Telegram a los ganadores. Si el sorteo ya estaba guardado, no hace nada.
+2. **22:00**: si hasta ese momento no se pudo obtener el resultado del día, envía una alerta al admin por Telegram.
+3. **Martes y sábado 20:00**: envía recordatorio a los usuarios que lo tienen activado: "Mañana es sorteo a las 21:15 hs".
 
-Manual Trigger / Cron
-        │
-Fetch Quini Page
-        │
-Parse HTML
-        │
-Guardar resultado en DB
+Cada ticket se compara contra: Tradicional, La Segunda, Revancha, Siempre Sale y Pozo Extra.
 
-Este workflow:
+Ejecución manual (admin o API): `POST /api/run-cycle` o comando `/runcycle` en Telegram.
 
-descarga el HTML
-
-extrae números y premios
-
-guarda el resultado estructurado
-
-## Workflow 2 — Validar tickets
-
-Load Tickets
-        │
-Loop Tickets
-        │
-Check Ticket Against Results
-        │
-Guardar resultado
-
-Cada ticket se compara contra:
-
-Tradicional
-
-Segunda
-
-Revancha
-
-Siempre Sale
-
-Pozo Extra
-
-## Workflow 3 — Notificación
-
-Si un ticket gana:
-
-Send Telegram Message
-
-Ejemplo de mensaje:
-
-# 🎉 Tu ticket ganó en el Quini 6
-
-Sorteo: 3355
-Fecha: 11/03/2026
-
-Modalidad: Tradicional
-Aciertos: 6
-
-Premio por ganador:
-$195.000.000
-
-Tus números:
-09 - 11 - 12 - 14 - 18 - 20
+---
 
 # 🤖 Telegram Bot
 
-Telegram se usa como interfaz para los usuarios.
+Telegram es la interfaz para los usuarios. Para registrarse hace falta un **código de invitación** (`/start CODIGO`).
 
-Registrar usuario
-/start
+**Comandos de usuario**
 
-Agregar ticket
-/add 09,11,12,14,18,20
+| Comando | Descripción |
+|--------|-------------|
+| `/start CODIGO` | Registrarse con el código de invitación |
+| `/add 09,11,12,14,18,20` | Agregar un ticket (límite configurable por usuario) |
+| `/tickets` | Ver mis tickets |
+| `/delete 3` | Eliminar el ticket N° 3 |
+| `/resultado` o `/check` | ¿Cómo me fue en el último sorteo? |
+| `/ultimo` | Ver el último sorteo guardado con premios |
+| `/historial` | Lista de los últimos sorteos guardados |
+| `/sorteo 11/03/2026` o `/sorteo 3355` | Buscar un sorteo por fecha o número |
+| `/recordar` | Activar/desactivar recordatorio antes del sorteo |
+| `/help` | Ayuda |
 
-Ver tickets
-/tickets
+**Comandos admin** (solo si está configurado `ADMIN_TELEGRAM_ID`)
 
-Eliminar ticket
-/delete 3
+| Comando | Descripción |
+|--------|-------------|
+| `/runcycle` | Forzar ciclo completo (fetch + validar + notificar) |
+| `/status` | Estado del sistema (usuarios, tickets, último sorteo) |
+| `/broadcast mensaje` | Enviar un mensaje a todos los usuarios |
+
+---
 
 # 🔄 Flujo completo del sistema
 
-Cron (miércoles y domingo)
+Cron (miércoles y domingo, 21:15–21:55 cada 5 min)
         │
-Fetch Quini Results
+Fetch Quini Results → Parse HTML → Save Draw Result
         │
-Parse HTML
-        │
-Save Draw Result
-        │
-Load Active Tickets
-        │
-Check Each Ticket
-        │
-Save Ticket Results
+Load Active Tickets → Check Each Ticket → Save Ticket Results
         │
 Notify Winners (Telegram)
+        │
+22:00 → Si no se obtuvo resultado: alerta al admin
+
+---
 
 # 🛠 Tecnologías utilizadas
 
-n8n → automatización de workflows
-
-Node.js / JavaScript → parsing y lógica de validación
-
-PostgreSQL → almacenamiento de resultados y tickets
-
-Telegram Bot API → comunicación con usuarios
+- **Node.js** (Express) — API, parser HTML y lógica de validación
+- **node-cron** — automatización (sorteos y recordatorios)
+- **PostgreSQL** — almacenamiento de resultados, usuarios y tickets
+- **Telegram Bot API** — comunicación con usuarios
