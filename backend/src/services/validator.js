@@ -284,10 +284,17 @@ function formatDrawSummary(drawResult) {
  * @returns {string}
  */
 function buildUserResultsMessage(contestNumber, dateStr, ticketsWithResults, drawResult) {
-  const lines = [
-    `📊 *Tus resultados — Sorteo N° ${contestNumber}* (${dateStr})`,
-    ``,
-  ];
+  const anyWin = (ticketsWithResults || []).some(t => t && t.won_any_prize);
+  const lines = anyWin
+    ? [
+      `🎉 *¡Felicitaciones! Tenés un ticket ganador*`,
+      `📊 *Sorteo N° ${contestNumber}* (${dateStr})`,
+      ``,
+    ]
+    : [
+      `📊 *Tus resultados — Sorteo N° ${contestNumber}* (${dateStr})`,
+      ``,
+    ];
 
   const drawSummary = formatDrawSummary(drawResult);
   if (drawSummary.length) {
@@ -303,6 +310,10 @@ function buildUserResultsMessage(contestNumber, dateStr, ticketsWithResults, dra
     const nums = (t.numbers_json || []).map(n => String(n).padStart(2, '0')).join(' - ');
     const labelPart = t.label ? ` — _${t.label}_` : '';
     const tipoPart = t.tipo ? ` (${t.tipo === 'unico' ? 'Único' : 'Fijo'})` : '';
+    if (t.won_any_prize) {
+      lines.push(`━━━━━━━━━━━━━━━━━━`);
+      lines.push(`🎉 *GANASTE*`);
+    }
     lines.push(`🎱 *Ticket ${i + 1}*${tipoPart}${labelPart}`);
     lines.push(`   ${nums}`);
     if (t.created_at) {
@@ -326,7 +337,13 @@ function buildUserResultsMessage(contestNumber, dateStr, ticketsWithResults, dra
       } else {
         const hits = res.hits != null ? res.hits : 0;
         if (res.won && res.prize) {
-          lines.push(`   ${icon} ${name}: ${hits} aciertos — 🏆 *Ganaste* (${res.prize.prize || ''})`);
+          const perWinner = res.prize.prizePerWinner || '';
+          const totalPrize = res.prize.prize || '';
+          const winners = typeof res.prize.winners === 'number' ? res.prize.winners : null;
+          const winnersLabel = winners != null ? `${winners} ganador${winners !== 1 ? 'es' : ''}` : '';
+          const moneyLabel = perWinner || totalPrize;
+          const extra = [moneyLabel, winnersLabel].filter(Boolean).join(' — ');
+          lines.push(`   ${icon} ${name}: ${hits} aciertos — 🏆 *Ganaste*${extra ? ` (${extra})` : ''}`);
         } else {
           lines.push(`   ${icon} ${name}: ${hits} aciertos`);
         }
