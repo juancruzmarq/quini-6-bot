@@ -243,6 +243,7 @@ function formatDrawSummary(drawResult) {
   if (drawResult.jackpot) {
     lines.push(`💰 *Pozo acumulado:* ${drawResult.jackpot}`, ``);
   }
+  lines.push(`_Cada línea: aciertos · ganadores · pozo total · premio por ganador_`, ``);
 
   const fmtArsOpts = { style: 'currency', currency: 'ARS', maximumFractionDigits: 0, minimumFractionDigits: 0 };
   function formatArs(amount) {
@@ -275,10 +276,10 @@ function formatDrawSummary(drawResult) {
       lines.push(`⭐ *Pozo Extra* — Tradicional + La Segunda + Revancha`);
       if (mod.prizes && mod.prizes.length) {
         for (const p of mod.prizes) {
-          const g = p.winners === 0 ? 'Vacante' : `${p.winners} gan`;
+          const g = p.winners === 0 ? 'Vacante' : String(p.winners);
           const total = getTotalPrizeString(p);
-          const cuStr = !p.winners ? '' : (parsePrizeAmount(p) != null ? ` · ${formatArs(parsePrizeAmount(p))} c/u` : '');
-          lines.push(`   ${g} · ${total}${cuStr}`);
+          const porGanador = !p.winners ? '' : (parsePrizeAmount(p) != null ? ` · ${formatArs(parsePrizeAmount(p))}` : '');
+          lines.push(`   — · ${g} · ${total}${porGanador}`);
         }
       }
       lines.push(``);
@@ -288,9 +289,10 @@ function formatDrawSummary(drawResult) {
     lines.push(`${icon} *${name}:* ${nums || '—'}`);
     if (mod.prizes && mod.prizes.length) {
       for (const p of mod.prizes) {
-        const g = p.winners === 0 ? 'Vacante' : `${p.winners} gan`;
-        const cuStr = !p.winners ? '' : (parsePrizeAmount(p) != null ? ` · ${formatArs(parsePrizeAmount(p))} c/u` : '');
-        lines.push(`   ${p.hits} aciertos · ${g} · ${getTotalPrizeString(p)}${cuStr}`);
+        const g = p.winners === 0 ? 'Vacante' : String(p.winners);
+        const total = getTotalPrizeString(p);
+        const porGanador = !p.winners ? '' : (parsePrizeAmount(p) != null ? ` · ${formatArs(parsePrizeAmount(p))}` : '');
+        lines.push(`   ${p.hits} · ${g} · ${total}${porGanador}`);
       }
     }
     lines.push(``);

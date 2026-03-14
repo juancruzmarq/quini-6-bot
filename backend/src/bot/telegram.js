@@ -938,7 +938,9 @@ function formatDrawMessage(drawRow) {
   const lines = [
     `⭕ *Quini 6 — Sorteo N° ${drawRow.contest_number}*`,
     `📅 Fecha: *${date}*`,
-    r.jackpot ? `💰 Pozo acumulado: *${r.jackpot}* \n\n` : '',
+    r.jackpot ? `💰 Pozo acumulado: *${r.jackpot}*` : '',
+    ``,
+    `_Cada línea: aciertos · ganadores · pozo total · premio por ganador_`,
     ``,
   ].filter(Boolean);
 
@@ -976,13 +978,13 @@ function formatDrawMessage(drawRow) {
 
     if (mod.prizes?.length) {
       for (const p of mod.prizes) {
-        const g = p.winners === 0 ? 'Vacante' : `${p.winners} gan`;
+        const g = p.winners === 0 ? 'Vacante' : String(p.winners);
         const total = getTotalPrizeString(p);
-        const cuStr = !p.winners ? '' : (parsePrizeAmount(p) != null ? ` · ${formatArs(parsePrizeAmount(p))} c/u` : '');
+        const porGanador = !p.winners ? '' : (parsePrizeAmount(p) != null ? ` · ${formatArs(parsePrizeAmount(p))}` : '');
         if (key === 'pozo_extra') {
-          lines.push(`   ${g} · ${total}${cuStr}`);
+          lines.push(`   — · ${g} · ${total}${porGanador}`);
         } else {
-          lines.push(`   ${p.hits} aciertos · ${g} · ${total}${cuStr}`);
+          lines.push(`   ${p.hits} · ${g} · ${total}${porGanador}`);
         }
       }
     }
