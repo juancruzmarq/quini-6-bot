@@ -173,6 +173,13 @@ function registerHandlers(bot) {
           `/tickets — Ver tus tickets`,
           `/ultimo — Último sorteo`,
           `/help — Ayuda completa`,
+          ``,
+          `_Cómo agregar:_`,
+          `• *Único* — solo el próximo sorteo: \`/add 9,11,12,14,18,20 unico\``,
+          `• *Fijo* — todos los sorteos (por defecto): \`/add 9,11,12,14,18,20\` o \`... fijo\``,
+          `Podés usar 1 o 2 dígitos por número (ej: 9 o 09).`,
+          ``,
+          `Recibirás una notificación con tu resultado en cada sorteo que corresponda.`,
         ];
         if (isAdmin(chatId)) {
           lines.push(`\n🛡 *Sos admin.*`);
@@ -225,6 +232,11 @@ function registerHandlers(bot) {
         `/ultimo — Ver el último sorteo`,
         `/sorteo 11/03/26 — Ver sorteo por fecha`,
         `/help — Ver ayuda completa`,
+        ``,
+        `_Cómo agregar un ticket:_`,
+        `• *Único* — solo el próximo sorteo: \`/add 9,11,12,14,18,20 unico\``,
+        `• *Fijo* — todos los sorteos (por defecto): \`/add 9,11,12,14,18,20\` o \`... fijo\``,
+        `Podés usar 1 o 2 dígitos por número (ej: 9 o 09).`,
       ];
       if (isAdmin(chatId)) {
         welcomeLines.push(`\n🛡 *Sos admin.*`);
@@ -298,6 +310,11 @@ function registerHandlers(bot) {
         ``,
         `🎱 ${result.numbers.join(' - ')}`,
         `📌 Tipo: *${tipoLabel}*`,
+        ``,
+        `_Cómo agregar:_`,
+        `• *Único* — solo el próximo sorteo: \`/add 9,11,12,14,18,20 unico\``,
+        `• *Fijo* — todos los sorteos (por defecto): \`/add 9,11,12,14,18,20\` o \`... fijo\``,
+        `Podés usar 1 o 2 dígitos por número (ej: 9 o 09).`,
         ``,
         `Recibirás una notificación con tu resultado en cada sorteo que corresponda.`,
       ].join('\n'), { parse_mode: 'Markdown' });
@@ -830,7 +847,7 @@ function registerHandlers(bot) {
       `*Agregar ticket:*`,
       `/add 09,11,12,14,18,20` + ' [unico|fijo]',
       `_Único:_ solo el próximo sorteo. _Fijo:_ todos los sorteos (por defecto).`,
-      `Límite: ${MAX_TICKETS} tickets. Números del 0 al 45.`,
+      `Límite: ${MAX_TICKETS} tickets. Números del 0 al 45 (podés usar 1 o 2 dígitos: 9 o 09).`,
       ``,
       `*Ver tus tickets:*`,
       `/tickets`,
