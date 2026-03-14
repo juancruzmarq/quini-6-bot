@@ -159,7 +159,7 @@ async function runFullCycle({ silent = false } = {}) {
       let notified = 0;
       for (const [chatId, userTickets] of byUser) {
         try {
-          const message = buildUserResultsMessage(contestNumber, dateStr, userTickets);
+          const message = buildUserResultsMessage(contestNumber, dateStr, userTickets, drawResult);
           await _botInstance.sendMessage(chatId, message, { parse_mode: 'Markdown' });
           notified++;
         } catch (err) {

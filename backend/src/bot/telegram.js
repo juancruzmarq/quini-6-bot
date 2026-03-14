@@ -576,7 +576,7 @@ function registerHandlers(bot) {
         results_json: r.results_json,
         won_any_prize: r.won_any_prize,
       }));
-      const message = buildUserResultsMessage(lastDraw.contest_number, dateStr, userTickets);
+      const message = buildUserResultsMessage(lastDraw.contest_number, dateStr, userTickets, lastDraw.result_json);
       await bot.sendMessage(chatId, `🧪 *Test — así se enviaría tu resultado:*\n\n${message}`, { parse_mode: 'Markdown' });
     } catch (err) {
       log.bot.error({ err: err.message }, '/testresultado error');

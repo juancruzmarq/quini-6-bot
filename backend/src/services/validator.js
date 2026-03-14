@@ -233,20 +233,68 @@ const MODALITY_ICONS = {
 };
 
 /**
- * Construye el mensaje de "tus resultados" para un usuario: todos sus tickets
- * con el desglose por modalidad (aciertos y si ganó).
- * Se usa cuando hay un sorteo nuevo y se notifica a cada usuario.
+ * Arma la sección "Resultados del sorteo": números ganadores y premios por modalidad.
+ * @param {object} drawResult - result_json del sorteo (modalities, jackpot)
+ * @returns {string[]}
+ */
+function formatDrawSummary(drawResult) {
+  if (!drawResult || !drawResult.modalities) return [];
+  const lines = [];
+  if (drawResult.jackpot) {
+    lines.push(`💰 *Pozo acumulado:* ${drawResult.jackpot}`, ``);
+  }
+  const MOD_ORDER = ['tradicional', 'segunda', 'revancha', 'siempre_sale', 'pozo_extra'];
+  for (const key of MOD_ORDER) {
+    const mod = drawResult.modalities[key];
+    if (!mod) continue;
+    const icon = MODALITY_ICONS[key];
+    const name = MODALITY_NAMES[key];
+    if (key === 'pozo_extra') {
+      lines.push(`⭐ *Pozo Extra* — Se calcula con la unión de Tradicional + La Segunda + Revancha`);
+      if (mod.prizes && mod.prizes.length) {
+        for (const p of mod.prizes) {
+          const g = p.winners === 0 ? 'Vacante' : `${p.winners} ganador${p.winners !== 1 ? 'es' : ''}`;
+          lines.push(`   Premio: ${p.prize || ''} (${g})`);
+        }
+      }
+      lines.push(``);
+      continue;
+    }
+    const nums = (mod.numbers || []).map(n => String(n).padStart(2, '0')).join(' - ');
+    lines.push(`${icon} *${name}:* ${nums || '—'}`);
+    if (mod.prizes && mod.prizes.length) {
+      for (const p of mod.prizes) {
+        const g = p.winners === 0 ? 'Vacante' : `${p.winners} ganador${p.winners !== 1 ? 'es' : ''}`;
+        lines.push(`   ${p.hits} aciertos → ${g} | ${p.prize || ''}`);
+      }
+    }
+    lines.push(``);
+  }
+  return lines;
+}
+
+/**
+ * Construye el mensaje de "tus resultados" para un usuario: resultados del sorteo
+ * (números y premios por modalidad) + todos sus tickets con el desglose (aciertos y si ganó).
  *
  * @param {string} contestNumber
  * @param {string} dateStr - Fecha en DD/MM/YY
  * @param {Array<{ label?: string, numbers_json: string[], results_json: object, won_any_prize: boolean }>} ticketsWithResults
+ * @param {object} [drawResult] - result_json del sorteo (opcional); si se pasa, se incluye resumen del sorteo
  * @returns {string}
  */
-function buildUserResultsMessage(contestNumber, dateStr, ticketsWithResults) {
+function buildUserResultsMessage(contestNumber, dateStr, ticketsWithResults, drawResult) {
   const lines = [
     `📊 *Tus resultados — Sorteo N° ${contestNumber}* (${dateStr})`,
     ``,
   ];
+
+  const drawSummary = formatDrawSummary(drawResult);
+  if (drawSummary.length) {
+    lines.push(`📋 *Cómo terminó el sorteo*`, ``);
+    lines.push(...drawSummary);
+    lines.push(`━━━━━━━━━━━━━━━━━━`, `*Tus tickets*`, ``);
+  }
 
   const MOD_ORDER = ['tradicional', 'segunda', 'revancha', 'siempre_sale', 'pozo_extra'];
 
