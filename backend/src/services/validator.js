@@ -1,3 +1,5 @@
+const { formatDateDDMMYY } = require('../utils/dateFormat');
+
 /**
  * Motor de validación de tickets contra resultados del Quini 6.
  *
@@ -139,7 +141,7 @@ function buildWinnerMessage(user, ticket, contestNumber, drawDateRaw, validation
 
   const lines = [
     `🎉 *¡Ganaste en el Quini 6!*`,
-    `📅 Sorteo N° ${contestNumber} — ${drawDateRaw}`,
+    `📅 Sorteo N° ${contestNumber} — ${formatDateDDMMYY(drawDateRaw)}`,
   ];
 
   if (drawResult?.jackpot) {

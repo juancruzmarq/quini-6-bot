@@ -13,7 +13,7 @@
  *   /tickets            — Ver mis tickets
  *   /delete 3           — Eliminar ticket N° 3
  *   /ultimo             — Ver el último sorteo guardado
- *   /sorteo 11/03/2026  — Ver sorteo por fecha o número
+ *   /sorteo 11/03/26    — Ver sorteo por fecha o número
  *   /help               — Ayuda
  *
  * Comandos admin (solo ADMIN_TELEGRAM_ID):
@@ -24,6 +24,7 @@
 const TelegramBot = require('node-telegram-bot-api');
 const db          = require('../db');
 const log         = require('../logger');
+const { formatDateDDMMYY }            = require('../utils/dateFormat');
 const { validateAndNormalizeNumbers } = require('../routes/tickets');
 const { setBotInstance }              = require('../routes/notifications');
 
@@ -200,7 +201,7 @@ function registerHandlers(bot) {
         `/tickets — Ver tus tickets`,
         `/delete 3 — Eliminar el ticket N° 3`,
         `/ultimo — Ver el último sorteo`,
-        `/sorteo 11/03/2026 — Ver sorteo por fecha`,
+        `/sorteo 11/03/26 — Ver sorteo por fecha`,
         `/help — Ver ayuda completa`,
       ].join('\n'), { parse_mode: 'Markdown' });
 
@@ -411,13 +412,14 @@ function registerHandlers(bot) {
         );
         draw = rows[0] || null;
       } else {
-        const dateMatch = input.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+        const dateMatch = input.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2}|\d{4})$/);
         if (!dateMatch) {
           return bot.sendMessage(chatId,
-            `❌ Formato inválido. Usá:\n/sorteo 11/03/2026  — por fecha\n/sorteo 3355  — por número`
+            `❌ Formato inválido. Usá:\n/sorteo 11/03/26  — por fecha\n/sorteo 3355  — por número`
           );
         }
-        const [, day, month, year] = dateMatch;
+        const [, day, month, yearPart] = dateMatch;
+        const year = yearPart.length === 2 ? `20${yearPart}` : yearPart;
         const { rows } = await db.query(
           'SELECT * FROM quini_results WHERE draw_date = $1',
           [`${year}-${month.padStart(2,'0')}-${day.padStart(2,'0')}`]
@@ -519,7 +521,7 @@ function registerHandlers(bot) {
         ``,
         `📅 Último sorteo guardado:`,
         lastDraw
-          ? `   N° ${lastDraw.contest_number} — ${String(lastDraw.draw_date).slice(0,10)}`
+          ? `   N° ${lastDraw.contest_number} — ${formatDateDDMMYY(lastDraw.draw_date)}`
           : `   (ninguno)`,
         ``,
         `📊 Última validación:`,
@@ -574,7 +576,7 @@ function registerHandlers(bot) {
       const MOD_NAMES = { tradicional: 'Tradicional', segunda: 'La Segunda', revancha: 'Revancha', siempre_sale: 'Siempre Sale', pozo_extra: 'Pozo Extra' };
       const lines = [
         `📋 *¿Cómo me fue? — Sorteo N° ${lastDraw.contest_number}*`,
-        `📅 ${lastDraw.result_json?.drawDateRaw || lastDraw.draw_date}`,
+        `📅 ${formatDateDDMMYY(lastDraw.result_json?.drawDateRaw || lastDraw.draw_date)}`,
         ``,
       ];
 
@@ -625,9 +627,9 @@ function registerHandlers(bot) {
       const lines = [
         `📜 *Últimos sorteos guardados*`,
         ``,
-        ...rows.map((r, i) => `  ${i + 1}. N° ${r.contest_number} — ${String(r.draw_date).slice(0, 10)}`),
+        ...rows.map((r, i) => `  ${i + 1}. N° ${r.contest_number} — ${formatDateDDMMYY(r.draw_date)}`),
         ``,
-        `Consultá uno con /sorteo 3355 o /sorteo 11/03/2026`,
+        `Consultá uno con /sorteo 3355 o /sorteo 11/03/26`,
       ];
 
       await bot.sendMessage(chatId, lines.join('\n'), { parse_mode: 'Markdown' });
@@ -742,7 +744,7 @@ function registerHandlers(bot) {
       `/historial`,
       ``,
       `*Buscar un sorteo:*`,
-      `/sorteo 11/03/2026` + ' o ' + '/sorteo 3355',
+      `/sorteo 11/03/26` + ' o ' + '/sorteo 3355',
       ``,
       `*Recordatorio:*`,
       `/recordar` + ' — activar/desactivar aviso antes del sorteo',
@@ -808,11 +810,11 @@ const MODALITY_LABELS = {
 
 function formatDrawMessage(drawRow) {
   const r     = drawRow.result_json;
-  const date  = r.drawDateRaw || drawRow.draw_date;
+  const date  = formatDateDDMMYY(r?.drawDateRaw || drawRow.draw_date);
   const lines = [
     `⭕ *Quini 6 — Sorteo N° ${drawRow.contest_number}*`,
-    `📅 Fecha: ${date}`,
-    r.jackpot ? `💰 Pozo acumulado: *${r.jackpot}*` : '',
+    `📅 Fecha: *${date}*`,
+    r.jackpot ? `💰 Pozo acumulado: *${r.jackpot}* \n\n` : '',
     ``,
   ].filter(Boolean);
 
@@ -826,7 +828,7 @@ function formatDrawMessage(drawRow) {
     const numbers = mod.numbers?.length ? mod.numbers.join(' - ') : '—';
 
     lines.push(`*${label}*`);
-    lines.push(`🎱 ${numbers}`);
+    lines.push(`📜 | ${numbers} |`);
 
     if (mod.prizes?.length) {
       for (const p of mod.prizes) {
