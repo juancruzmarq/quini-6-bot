@@ -273,7 +273,7 @@ function formatDrawSummary(drawResult) {
     const icon = MODALITY_ICONS[key];
     const name = MODALITY_NAMES[key];
     if (key === 'pozo_extra') {
-      lines.push(`⭐ *Pozo Extra* — Tradicional + La Segunda + Revancha`);
+      lines.push(`⭐ *Pozo Extra*`);
       if (mod.prizes && mod.prizes.length) {
         for (const p of mod.prizes) {
           const g = p.winners === 0 ? 'Vacante' : String(p.winners);

@@ -256,6 +256,7 @@ Telegram es la interfaz para los usuarios. Para registrarse hace falta un **cód
 | `/historial` | Lista de los últimos sorteos guardados |
 | `/sorteo 11/03/2026` o `/sorteo 3355` | Buscar un sorteo por fecha o número |
 | `/recordar` | Activar/desactivar recordatorio antes del sorteo |
+| `/premios` | Explicación del Quini 6 y cómo funcionan los premios (modalidades, pozo extra) |
 | `/help` | Ayuda |
 
 **Comandos admin** (solo si está configurado `ADMIN_TELEGRAM_ID`). Si sos admin, al hacer `/start` o `/help` el bot te indica que sos admin y te muestra estos comandos:

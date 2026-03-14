@@ -183,6 +183,7 @@ function registerHandlers(bot) {
           `/tickets — Ver tus tickets`,
           `/ultimo — Último sorteo`,
           `/help — Ayuda completa`,
+          `/premios — Cómo funciona el Quini 6 y los premios`,
           ``,
           `_Cómo agregar:_`,
           `• *Único* — solo el próximo sorteo: \`/add 9,11,12,14,18,20 unico\``,
@@ -242,6 +243,7 @@ function registerHandlers(bot) {
         `/ultimo — Ver el último sorteo`,
         `/sorteo 11/03/26 — Ver sorteo por fecha`,
         `/help — Ver ayuda completa`,
+        `/premios — Cómo funciona el Quini 6 y los premios`,
         ``,
         `_Cómo agregar un ticket:_`,
         `• *Único* — solo el próximo sorteo: \`/add 9,11,12,14,18,20 unico\``,
@@ -830,6 +832,35 @@ function registerHandlers(bot) {
     }
   });
 
+  // /premios — Explicación del Quini 6 y cómo funcionan los premios
+  bot.onText(/\/premios/, async (msg) => {
+    const chatId = String(msg.chat.id);
+    if (isRateLimited(chatId, 'premios')) return;
+
+    await bot.sendMessage(chatId, [
+      `*🎲 ¿Cómo funciona el Quini 6?*`,
+      ``,
+      `Elegís 6 números del 0 al 45. En cada sorteo (miércoles y domingos 21:15) se sortean números por modalidad. Si tus números coinciden, ganás.`,
+      ``,
+      `*🔵 Tradicional*`,
+      `Ganás con 4, 5 o 6 aciertos. Premio según cantidad de ganadores en cada nivel.`,
+      ``,
+      `*🟢 La Segunda*`,
+      `Otro set de 6 números. Ganás con 4, 5 o 6 aciertos.`,
+      ``,
+      `*🔴 Revancha*`,
+      `Solo con 6 aciertos. Suele acumular mucho (vacante = se acumula).`,
+      ``,
+      `*🟡 Siempre Sale*`,
+      `Ganás con 5 aciertos. Hay premio asegurado en cada sorteo.`,
+      ``,
+      `*⭐ Pozo Extra*`,
+      `Se arma con la unión de los números de Tradicional + La Segunda + Revancha (sin repetir). Ganás si tus 6 números están todos dentro de esa unión. _No participás si ya ganaste en otra modalidad._`,
+      ``,
+      `En el mensaje de resultados, cada línea es: _aciertos · ganadores · pozo total · premio por ganador._`,
+    ].join('\n'), { parse_mode: 'Markdown' });
+  });
+
   // /help
   bot.onText(/\/help/, async (msg) => {
     const chatId = String(msg.chat.id);
@@ -867,6 +898,9 @@ function registerHandlers(bot) {
       ``,
       `*Recordatorio:*`,
       `/recordar` + ' — activar/desactivar aviso antes del sorteo',
+      ``,
+      `*¿Cómo funciona el Quini 6 y los premios?*`,
+      `/premios`,
       ``,
       `*Notificaciones:*`,
       `Cuando haya resultados (mié/dom), recibirás un mensaje. Si ganaste, con el detalle.`,
