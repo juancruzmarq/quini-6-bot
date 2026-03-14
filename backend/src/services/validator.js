@@ -243,6 +243,28 @@ function formatDrawSummary(drawResult) {
   if (drawResult.jackpot) {
     lines.push(`💰 *Pozo acumulado:* ${drawResult.jackpot}`, ``);
   }
+
+  function formatArs(amount) {
+    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount);
+  }
+
+  function parsePrizeAmount(prizeEntry) {
+    const raw = typeof prizeEntry?.prizeAmount === 'number' ? prizeEntry.prizeAmount : null;
+    if (!raw) return null;
+    // Si el texto original tiene coma decimal, prizeAmount viene como centavos (se parsea quitando todo excepto dígitos).
+    const hasDecimalComma = typeof prizeEntry.prize === 'string' && prizeEntry.prize.includes(',');
+    return hasDecimalComma ? raw / 100 : raw;
+  }
+
+  function getTotalPrizeString(p) {
+    // En este proyecto, p.prize suele ser el premio por ganador (ya dividido).
+    // Para mostrar pozo total, multiplicamos por winners cuando se pueda.
+    const winners = typeof p?.winners === 'number' ? p.winners : null;
+    const perAmount = parsePrizeAmount(p);
+    if (!winners || winners <= 0 || !perAmount) return p?.prize || '';
+    return formatArs(perAmount * winners);
+  }
+
   const MOD_ORDER = ['tradicional', 'segunda', 'revancha', 'siempre_sale', 'pozo_extra'];
   for (const key of MOD_ORDER) {
     const mod = drawResult.modalities[key];
@@ -254,7 +276,9 @@ function formatDrawSummary(drawResult) {
       if (mod.prizes && mod.prizes.length) {
         for (const p of mod.prizes) {
           const g = p.winners === 0 ? 'Vacante' : `${p.winners} ganador${p.winners !== 1 ? 'es' : ''}`;
-          lines.push(`   Premio: ${p.prize || ''} (${g})`);
+          const totalPrize = getTotalPrizeString(p);
+          const porGanador = p.prize ? ` | ${p.prize} c/u` : '';
+          lines.push(`   Premio: ${totalPrize}${porGanador} (${g})`);
         }
       }
       lines.push(``);
@@ -265,8 +289,9 @@ function formatDrawSummary(drawResult) {
     if (mod.prizes && mod.prizes.length) {
       for (const p of mod.prizes) {
         const g = p.winners === 0 ? 'Vacante' : `${p.winners} ganador${p.winners !== 1 ? 'es' : ''}`;
-        const porGanador = p.prizePerWinner ? ` | ${p.prizePerWinner} c/u` : '';
-        lines.push(`   ${p.hits} - ${g} | ${p.prize || ''}${porGanador}`);
+        const totalPrize = getTotalPrizeString(p);
+        const porGanador = p.prize ? ` | ${p.prize} c/u` : '';
+        lines.push(`   ${p.hits} - ${g} | ${totalPrize}${porGanador}`);
       }
     }
     lines.push(``);

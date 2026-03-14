@@ -944,6 +944,24 @@ function formatDrawMessage(drawRow) {
 
   const ORDER = ['tradicional', 'segunda', 'revancha', 'siempre_sale', 'pozo_extra'];
 
+  function formatArs(amount) {
+    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(amount);
+  }
+
+  function parsePrizeAmount(prizeEntry) {
+    const raw = typeof prizeEntry?.prizeAmount === 'number' ? prizeEntry.prizeAmount : null;
+    if (!raw) return null;
+    const hasDecimalComma = typeof prizeEntry.prize === 'string' && prizeEntry.prize.includes(',');
+    return hasDecimalComma ? raw / 100 : raw;
+  }
+
+  function getTotalPrizeString(p) {
+    const winners = typeof p?.winners === 'number' ? p.winners : null;
+    const perAmount = parsePrizeAmount(p);
+    if (!winners || winners <= 0 || !perAmount) return p?.prize || '';
+    return formatArs(perAmount * winners);
+  }
+
   for (const key of ORDER) {
     const mod = r.modalities?.[key];
     if (!mod) continue;
@@ -957,8 +975,15 @@ function formatDrawMessage(drawRow) {
     if (mod.prizes?.length) {
       for (const p of mod.prizes) {
         const ganadores = p.winners === 0 ? 'Vacante' : `${p.winners} ganador${p.winners !== 1 ? 'es' : ''}`;
-        const porGanador = p.prizePerWinner ? ` | ${p.prizePerWinner} c/u` : '';
-        lines.push(`  ${p.hits} - ${ganadores} | ${p.prize || ''}${porGanador}`);
+        if (key === 'pozo_extra') {
+          const totalPrize = getTotalPrizeString(p);
+          const porGanador = p.prize ? ` | ${p.prize} c/u` : '';
+          lines.push(`  Premio: ${totalPrize}${porGanador} (${ganadores})`);
+        } else {
+          const totalPrize = getTotalPrizeString(p);
+          const porGanador = p.prize ? ` | ${p.prize} c/u` : '';
+          lines.push(`  ${p.hits} - ${ganadores} | ${totalPrize}${porGanador}`);
+        }
       }
     }
 
