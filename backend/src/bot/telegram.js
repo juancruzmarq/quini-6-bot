@@ -19,7 +19,7 @@
  * Comandos admin (solo ADMIN_TELEGRAM_ID):
  *   /runcycle           — Forzar ciclo completo (fetch + validar + notificar)
  *   /status             — Estado del sistema
- *   /testresultado      — Vista previa del mensaje de resultados (tus tickets, último sorteo)
+ *   /testresult         — Vista previa del mensaje de resultados (tus tickets, último sorteo)
  *   /resetdb            — Reiniciar toda la data de la base (usuarios, tickets, resultados)
  *   /broadcast mensaje  — Enviar mensaje a todos los usuarios
  */
@@ -51,7 +51,7 @@ function getAdminCommandsLines() {
     `🛡 *Comandos admin:*`,
     `/runcycle — Forzar ciclo (fetch + validar + notificar)`,
     `/status — Estado del sistema`,
-    `/testresultado — Vista previa de resultados`,
+    `/testresult — Vista previa de resultados`,
     `/resetdb — Reiniciar toda la data de la base`,
     `/broadcast mensaje — Enviar mensaje a todos`,
   ];
@@ -586,7 +586,7 @@ function registerHandlers(bot) {
           ? `   Sorteo ${lastVal.contest_number} — ${lastVal.winners} ganadores de ${lastVal.total} tickets`
           : `   (ninguna)`,
         ``,
-        `⏰ Próxima ejecución: mié/dom a las 21:15 hs`,
+        `⏰ Próxima ejecución: mié/dom a las 21:20 hs`,
       ];
 
       await bot.sendMessage(chatId, lines.join('\n'), { parse_mode: 'Markdown' });
@@ -595,13 +595,13 @@ function registerHandlers(bot) {
     }
   });
 
-  // /testresultado — Admin: vista previa del mensaje de resultados (tus tickets, último sorteo).
+  // /testresult — Admin: vista previa del mensaje de resultados (tus tickets, último sorteo).
   // Calcula en el momento qué tickets participarían (created_at <= draw_date) y simula la validación,
   // así funciona aunque aún no existan ticket_results en la DB.
-  bot.onText(/\/testresultado/, async (msg) => {
+  bot.onText(/\/testresult/, async (msg) => {
     const chatId = String(msg.chat.id);
     if (!isAdmin(chatId)) return;
-    if (isRateLimited(chatId, 'testresultado')) return;
+    if (isRateLimited(chatId, 'testresult')) return;
 
     try {
       const lastDraw = (await db.query(
@@ -640,12 +640,12 @@ function registerHandlers(bot) {
       const message = buildUserResultsMessage(lastDraw.contest_number, dateStr, userTickets, lastDraw.result_json);
       await bot.sendMessage(chatId, `🧪 *Test — así se enviaría tu resultado:*\n\n${message}`, { parse_mode: 'Markdown' });
     } catch (err) {
-      log.bot.error({ err: err.message }, '/testresultado error');
+      log.bot.error({ err: err.message }, '/testresult error');
       await bot.sendMessage(chatId, `❌ Error: ${err.message}`);
     }
   });
 
-  // /resultado o /check — ¿Cómo me fue en el último sorteo?
+  // /resultado o /check — Mismo formato que el mensaje de notificación (tus tickets, último sorteo).
   bot.onText(/\/(resultado|check)/, async (msg) => {
     const chatId = String(msg.chat.id);
     if (isRateLimited(chatId, 'resultado')) return;
@@ -654,57 +654,38 @@ function registerHandlers(bot) {
       const user = await requireUser(chatId);
       if (!user) return;
 
-      const lastDraw = (await db.query('SELECT * FROM quini_results ORDER BY draw_date DESC LIMIT 1')).rows[0];
+      const lastDraw = (await db.query(
+        'SELECT contest_number, draw_date, result_json FROM quini_results ORDER BY draw_date DESC LIMIT 1'
+      )).rows[0];
+
       if (!lastDraw) {
         return bot.sendMessage(chatId, '📭 Aún no hay sorteos guardados.');
       }
 
-      const myTickets = (await db.query(
-        'SELECT id, numbers_json, label, tipo FROM tickets WHERE user_id = $1 AND is_active = true ORDER BY created_at ASC',
-        [user.id]
-      )).rows;
+      const tickets = await getTicketsToValidateForDraw(db, lastDraw.draw_date, { userId: user.id });
 
-      if (!myTickets.length) {
-        return bot.sendMessage(chatId, 'No tenés tickets registrados. Usá /add para agregar.');
+      if (!tickets.length) {
+        return bot.sendMessage(chatId, [
+          `No tenés tickets que participen del sorteo N° ${lastDraw.contest_number} (${formatDateDDMMYY(lastDraw.draw_date)}).`,
+          ``,
+          `Un ticket participa si su *fecha de alta* es ≤ fecha del sorteo. Agregá tickets con /add o revisá las fechas.`,
+        ].join('\n'), { parse_mode: 'Markdown' });
       }
 
-      const results = await db.query(
-        `SELECT tr.ticket_id, tr.won_any_prize, tr.results_json
-         FROM ticket_results tr
-         JOIN tickets t ON t.id = tr.ticket_id
-         WHERE tr.contest_number = $1 AND t.user_id = $2`,
-        [lastDraw.contest_number, user.id]
-      );
-
-      const byTicket = new Map(results.rows.map(r => [r.ticket_id, r]));
-
-      const MOD_NAMES = { tradicional: 'Tradicional', segunda: 'La Segunda', revancha: 'Revancha', siempre_sale: 'Siempre Sale', pozo_extra: 'Pozo Extra' };
-      const lines = [
-        `📋 *¿Cómo me fue? — Sorteo N° ${lastDraw.contest_number}*`,
-        `📅 ${formatDateDDMMYY(lastDraw.result_json?.drawDateRaw || lastDraw.draw_date)}`,
-        ``,
-      ];
-
-      myTickets.forEach((t, i) => {
-        const tr = byTicket.get(t.id);
-        const nums = t.numbers_json.join(' - ');
-        const label = t.label ? ` _(${t.label})_` : '';
-        const tipoStr = t.tipo ? ` — ${t.tipo === 'unico' ? 'Único' : 'Fijo'}` : '';
-        if (!tr) {
-          lines.push(`🎱 *${i + 1}.* ${nums}${tipoStr}${label}`);
-          lines.push(`   ⏳ Sin validar para este sorteo`);
-        } else if (tr.won_any_prize) {
-          const wonMods = Object.entries(tr.results_json || {}).filter(([, r]) => r.won).map(([k]) => MOD_NAMES[k] || k);
-          lines.push(`🎱 *${i + 1}.* ${nums}${tipoStr}${label}`);
-          lines.push(`   🏆 *Ganaste* en: ${wonMods.join(', ')}`);
-        } else {
-          lines.push(`🎱 *${i + 1}.* ${nums}${tipoStr}${label}`);
-          lines.push(`   ▫️ Sin premio en este sorteo`);
-        }
-        lines.push('');
+      const dateStr = formatDateDDMMYY(lastDraw.result_json?.drawDateRaw || lastDraw.draw_date);
+      const userTickets = tickets.map(t => {
+        const { wonAny, results } = validateTicket(t.numbers_json, lastDraw.result_json);
+        return {
+          label: t.label,
+          numbers_json: t.numbers_json,
+          tipo: t.tipo,
+          results_json: results,
+          won_any_prize: wonAny,
+          created_at: t.created_at,
+        };
       });
-
-      await bot.sendMessage(chatId, lines.join('\n').trim(), { parse_mode: 'Markdown' });
+      const message = buildUserResultsMessage(lastDraw.contest_number, dateStr, userTickets, lastDraw.result_json);
+      await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
     } catch (err) {
       log.bot.error({ err: err.message }, '/resultado error');
       await bot.sendMessage(chatId, `❌ Error: ${err.message}`);

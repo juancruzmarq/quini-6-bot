@@ -3,7 +3,7 @@
  *
  * Lógica de ejecución (miércoles y domingos):
  *
- *   21:15 → 21:55  Intento cada 5 minutos de obtener el resultado.
+ *   21:20 → 21:55  Intento cada 5 minutos de obtener el resultado.
  *                  Si ya está guardado, el intento se saltea silenciosamente.
  *                  Si se obtiene, valida tickets y notifica ganadores.
  *
@@ -23,8 +23,8 @@ const { getTicketsToValidateForDraw, runValidationForDraw } = require('./ticketV
 
 // ── Configuración ─────────────────────────────────────────────────────────────
 
-// Cron 1: cada 5 min de 21:15 a 21:55 los mié y dom
-const SCHEDULE_POLLING = '15,20,25,30,35,40,45,50,55 21 * * 0,3';
+// Cron 1: cada 5 min de 21:20 a 21:55 los mié y dom
+const SCHEDULE_POLLING = '20,25,30,35,40,45,50,55 21 * * 0,3';
 
 // Cron 2: a las 22:00 los mié y dom — alerta si no se obtuvo el resultado
 const SCHEDULE_ALERT   = '0 22 * * 0,3';
@@ -72,6 +72,16 @@ async function runFullCycle({ silent = false } = {}) {
       return result;
     }
 
+    // Solo guardar si hay datos útiles (números de Tradicional): evita marcar como obtenido un resultado vacío.
+    const trad = parsed.modalities?.tradicional;
+    const hasTradicionalNumbers = Array.isArray(trad?.numbers) && trad.numbers.length === 6;
+    if (!hasTradicionalNumbers) {
+      const msg = 'Parser devolvió resultado sin datos completos (falta Tradicional con 6 números) — no se guarda';
+      log.cron.warn({ contestNumber: parsed.contestNumber, drawDate: parsed.drawDate }, msg);
+      result.error = msg;
+      return result;
+    }
+
     // ── Verificar si ya existe ────────────────────────────────────────────────
     const existing = await db.query(
       'SELECT id FROM quini_results WHERE contest_number = $1',
@@ -111,7 +121,7 @@ async function runFullCycle({ silent = false } = {}) {
       log.cron.warn('Bot no disponible — saltando notificaciones');
       result.notifyResult = { notified: 0, reason: 'bot no disponible' };
     } else {
-      const dateStr = formatDateDDMMYY(drawResult.drawDateRaw || drawRow.draw_date);
+      const dateStr = formatDateDDMMYY(drawRow.result_json?.drawDateRaw || drawRow.draw_date);
       const rows    = (await db.query(
         `SELECT u.telegram_chat_id, u.name, t.id AS ticket_id, t.label, t.numbers_json, t.tipo, t.created_at AS ticket_created_at, tr.results_json, tr.won_any_prize
          FROM ticket_results tr
@@ -139,7 +149,7 @@ async function runFullCycle({ silent = false } = {}) {
       let notified = 0;
       for (const [chatId, userTickets] of byUser) {
         try {
-          const message = buildUserResultsMessage(contestNumber, dateStr, userTickets, drawResult);
+          const message = buildUserResultsMessage(contestNumber, dateStr, userTickets, drawRow.result_json);
           await _botInstance.sendMessage(chatId, message, { parse_mode: 'Markdown' });
           notified++;
         } catch (err) {
@@ -210,7 +220,7 @@ async function runAlertCheck() {
 // ── Inicialización ────────────────────────────────────────────────────────────
 
 function initializeCron() {
-  // Job 1: polling cada 5 minutos de 21:15 a 21:55
+  // Job 1: polling cada 5 minutos de 21:20 a 21:55
   cron.schedule(SCHEDULE_POLLING, () => {
     runFullCycle({ silent: false }).catch(err =>
       log.cron.error({ err: err.message }, 'Error no capturado en polling')

@@ -1,6 +1,6 @@
 /**
  * Lógica compartida para validar tickets contra un sorteo.
- * Usado por: cron, API results (validate-tickets), bot (/testresultado).
+ * Usado por: cron, API results (validate-tickets), bot (/testresult).
  *
  * Reglas:
  *   - Solo tickets con created_at::date <= draw_date
