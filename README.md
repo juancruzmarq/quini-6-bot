@@ -24,7 +24,7 @@ Automatizar el proceso de:
 ```
 Backend (Node.js + Express)
 │
-├── Cron (node-cron): mié/dom 21:15–21:55 cada 5 min → fetch + parse + guardar + validar + notificar
+├── Cron (node-cron): mié/dom 21:20–21:55 cada 5 min → fetch + parse + guardar + validar + notificar
 ├── Cron 22:00 → alerta al admin si no se obtuvo el resultado
 ├── Cron mar/sáb 20:00 → recordatorio "mañana es sorteo"
 │
@@ -229,7 +229,7 @@ created_at
 
 El backend usa **node-cron** para ejecutar el ciclo completo en miércoles y domingos:
 
-1. **21:15 a 21:55** (cada 5 min): intenta obtener el resultado del sitio, parsea el HTML, guarda en DB, valida todos los tickets activos y notifica por Telegram a los ganadores. Si el sorteo ya estaba guardado, no hace nada.
+1. **21:20 a 21:55** (cada 5 min): intenta obtener el resultado del sitio, parsea el HTML, guarda en DB (solo si el resultado tiene datos completos), valida todos los tickets activos y notifica por Telegram a los ganadores. Si el sorteo ya estaba guardado, no hace nada.
 2. **22:00**: si hasta ese momento no se pudo obtener el resultado del día, envía una alerta al admin por Telegram.
 3. **Martes y sábado 20:00**: envía recordatorio a los usuarios que lo tienen activado: "Mañana es sorteo a las 21:15 hs".
 
@@ -265,7 +265,7 @@ Telegram es la interfaz para los usuarios. Para registrarse hace falta un **cód
 |--------|-------------|
 | `/runcycle` | Forzar ciclo completo (fetch + validar + notificar) |
 | `/status` | Estado del sistema (usuarios, tickets, último sorteo) |
-| `/testresultado` | Vista previa del mensaje de resultados (tus tickets contra el último sorteo) |
+| `/testresult` | Vista previa del mensaje de resultados (tus tickets contra el último sorteo) |
 | `/resetdb` | Reiniciar toda la data de la base (usuarios, tickets, resultados de sorteos y validaciones) |
 | `/broadcast mensaje` | Enviar un mensaje a todos los usuarios |
 
@@ -273,7 +273,7 @@ Telegram es la interfaz para los usuarios. Para registrarse hace falta un **cód
 
 # 🔄 Flujo completo del sistema
 
-Cron (miércoles y domingo, 21:15–21:55 cada 5 min)
+Cron (miércoles y domingo, 21:20–21:55 cada 5 min)
         │
 Fetch Quini Results → Parse HTML → Save Draw Result
         │
